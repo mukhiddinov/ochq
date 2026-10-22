@@ -1,0 +1,47 @@
+[Unit]
+Description=OCHQ tunnel server
+Documentation=https://github.com/mukhiddinov/ochq
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ochq
+Group=ochq
+EnvironmentFile=/etc/ochq/ochqd.env
+# /opt/ochq/current is a symlink to the active release (see ochq-deploy).
+ExecStart=/opt/ochq/current/ochqd \
+    -tunnel-addr ${OCHQD_TUNNEL_ADDR} \
+    -http-addr ${OCHQD_HTTP_ADDR} \
+    -domain ${OCHQD_DOMAIN} \
+    -public-scheme ${OCHQD_PUBLIC_SCHEME} \
+    -public-port ${OCHQD_PUBLIC_PORT}
+Restart=on-failure
+RestartSec=2s
+# Every tunnel and every proxied request holds file descriptors.
+LimitNOFILE=65536
+
+# Sandboxing: ochqd only needs the network.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

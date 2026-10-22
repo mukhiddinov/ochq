@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  deploy:
+    needs: test
+    # Only main, and only once the repository variable DEPLOY_HOST is set.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    environment: production
+    # Never run two deploys at once; queue them instead.
+    concurrency:
+      group: production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build ochqd
+        env:
+          CGO_ENABLED: "0"
+          GOOS: linux
+          GOARCH: ${{ vars.DEPLOY_ARCH || 'amd64' }}
+        run: |
+          VERSION="${GITHUB_SHA::12}"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          go build -trimpath \
+            -ldflags "-s -w -X github.com/mukhiddinov/ochq/pkg/version.Version=$VERSION" \
+            -o ochqd ./cmd/ochqd
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Pinned host key: refuse to talk to anything pretending to be our VPS.
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+        run: |
+          # The deploy key's forced command runs `ochq-deploy $VERSION`
+          # and reads the binary from stdin.
+          ssh -o BatchMode=yes -p "$DEPLOY_PORT" "deploy@$DEPLOY_HOST" "$VERSION" < ochqd

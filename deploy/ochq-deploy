@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Installs a new ochqd release. Runs as root via sudo, and is the ONLY
+# command the CI deploy key may run (see authorized_keys forced command):
+#
+#   ssh deploy@vps <version> < ochqd
+#
+# Layout:
+#   /opt/ochq/releases/<version>/ochqd
+#   /opt/ochq/current -> releases/<version>   (switched atomically)
+set -euo pipefail
+umask 022
+
+BASE=/opt/ochq
+KEEP=5
+MAX_BYTES=$((100 * 1024 * 1024))
+
+log() { echo "ochq-deploy: $*" >&2; }
+
+VERSION="${1:-}"
+if [[ ! "$VERSION" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
+    log "usage: ochq-deploy <version> < ochqd   (version: [A-Za-z0-9._-], max 64)"
+    exit 2
+fi
+
+RELEASES="$BASE/releases"
+REL="$RELEASES/$VERSION"
+
+# 1. Receive the binary from stdin into a temp dir next to the releases,
+#    so the final mv is an atomic rename on the same filesystem.
+TMP=$(mktemp -d "$RELEASES/.incoming.XXXXXX")
+trap 'rm -rf "$TMP"' EXIT
+chmod 0755 "$TMP"
+head -c "$MAX_BYTES" > "$TMP/ochqd"
+chmod 0755 "$TMP/ochqd"
+
+# 2. Smoke test as the unprivileged service user, never as root.
+if ! got=$(runuser -u ochq -- "$TMP/ochqd" -version 2>&1); then
+    log "uploaded binary does not run: $got"
+    exit 1
+fi
+log "received $got"
+
+rm -rf "$REL"
+mv "$TMP" "$REL"
+
+# 3. Switch the symlink atomically and restart.
+PREV=$(readlink -f "$BASE/current" || true)
+ln -sfn "$REL" "$BASE/current.new"
+mv -T "$BASE/current.new" "$BASE/current"
+systemctl restart ochqd
+
+# 4. Health check; roll back if the new release does not stay up.
+sleep 3
+if ! systemctl is-active --quiet ochqd; then
+    log "ochqd failed to start; last logs:"
+    journalctl -u ochqd -n 20 --no-pager >&2 || true
+    if [[ -n "$PREV" && -d "$PREV" && "$PREV" != "$REL" ]]; then
+        log "rolling back to $PREV"
+        ln -sfn "$PREV" "$BASE/current.new"
+        mv -T "$BASE/current.new" "$BASE/current"
+        systemctl restart ochqd
+    fi
+    exit 1
+fi
+log "deployed $VERSION"
+
+# 5. Keep only the newest $KEEP releases (never the active one).
+CUR=$(readlink -f "$BASE/current")
+find "$RELEASES" -mindepth 1 -maxdepth 1 -type d ! -name '.incoming.*' -printf '%T@ %p\n' |
+    sort -rn | tail -n +$((KEEP + 1)) | cut -d' ' -f2- |
+    while read -r old; do
+        [[ "$old" == "$CUR" ]] || rm -rf -- "$old"
+    done
