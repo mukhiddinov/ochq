@@ -67,4 +67,4 @@ jobs:
         run: |
           # The deploy key's forced command runs `ochq-deploy $VERSION`
           # and reads the binary from stdin.
-          ssh -o BatchMode=yes -p "$DEPLOY_PORT" "deploy@$DEPLOY_HOST" "$VERSION" < ochqd
+          ssh -o BatchMode=yes -p "$DEPLOY_PORT" "ochq_deploy@$DEPLOY_HOST" "$VERSION" < ochqd

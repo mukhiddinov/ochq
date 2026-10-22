@@ -2,7 +2,7 @@
 # Installs a new ochqd release. Runs as root via sudo, and is the ONLY
 # command the CI deploy key may run (see authorized_keys forced command):
 #
-#   ssh deploy@vps <version> < ochqd
+#   ssh ochq_deploy@vps <version> < ochqd
 #
 # Layout:
 #   /opt/ochq/releases/<version>/ochqd
