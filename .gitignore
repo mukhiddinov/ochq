@@ -1,0 +1,19 @@
+# Build output
+/bin/
+/dist/
+/ochq
+/ochqd
+
+# Test & coverage
+*.test
+*.out
+coverage.html
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+
+# Local config & secrets
+.env
+*.local
