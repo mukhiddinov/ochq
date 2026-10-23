@@ -120,6 +120,10 @@ func ServerConfig(cert tls.Certificate) *tls.Config {
 	}
 }
 
+// ErrFingerprintMismatch means the server presented a different key than
+// the pinned one.
+var ErrFingerprintMismatch = errors.New("server fingerprint mismatch")
+
 // UnverifiedError means the server certificate is not signed by a trusted
 // CA and no fingerprint was pinned. It carries the presented fingerprint so
 // the user can compare it with the one ochqd logs.
@@ -155,8 +159,8 @@ func ClientConfig(serverName, pin string) *tls.Config {
 
 			if pin != "" {
 				if got != pin {
-					return fmt.Errorf("server fingerprint mismatch: got %s, want %s "+
-						"(the server key changed, or someone is intercepting the connection)", got, pin)
+					return fmt.Errorf("%w: got %s, want %s (the server key changed, "+
+						"or someone is intercepting the connection)", ErrFingerprintMismatch, got, pin)
 				}
 				return nil
 			}
