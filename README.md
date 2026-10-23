@@ -204,7 +204,7 @@ go install github.com/mukhiddinov/ochq/cmd/ochq@latest
 Check the installation on any platform:
 
 ```bash
-ochq -version
+ochq version
 ```
 
 ## Quick start
@@ -267,8 +267,35 @@ the flag wins if both are set.
 | `--token` | `OCHQ_TOKEN` | Access token, if the server requires one |
 | `--fingerprint` | `OCHQ_FINGERPRINT` | Pin the server's TLS key (`SHA256:...`) |
 | `--sub` | — | Requested subdomain; random if omitted |
-| `--version` | — | Print the version and exit |
 | — | `NO_COLOR` | Disable colored output ([no-color.org](https://no-color.org)) |
+
+Other commands:
+
+| Command | Description |
+|---|---|
+| `ochq help [command]` | Help for `ochq` or one of its commands (also `-h`, `--help`) |
+| `ochq version` | Print the version (also `--version`) |
+| `ochq completion <shell>` | Print a completion script for `bash`, `zsh`, `fish` or `powershell` |
+
+### Shell completion
+
+Press <kbd>Tab</kbd> to complete commands and flags. The apt and dnf packages
+and the Homebrew cask install completion for bash, zsh and fish automatically —
+open a new shell. Otherwise:
+
+```bash
+# bash (needs the bash-completion package)
+ochq completion bash | sudo tee /etc/bash_completion.d/ochq >/dev/null
+# zsh
+ochq completion zsh > "${fpath[1]}/_ochq"
+# fish
+ochq completion fish > ~/.config/fish/completions/ochq.fish
+```
+
+```powershell
+# PowerShell: load it in every session
+Add-Content $PROFILE 'ochq completion powershell | Out-String | Invoke-Expression'
+```
 
 **What you see.** Every completed request becomes one log line with its time,
 method, path, status and duration. If the connection to the server drops,

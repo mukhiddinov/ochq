@@ -17,3 +17,4 @@ coverage.html
 # Local config & secrets
 .env
 *.local
+/completions/
