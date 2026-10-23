@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # "Run workflow" button: redeploy main without a new commit.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,7 +26,7 @@ jobs:
   deploy:
     needs: test
     # Only main, and only once the repository variable DEPLOY_HOST is set.
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
     runs-on: ubuntu-latest
     environment: production
     # Never run two deploys at once; queue them instead.
