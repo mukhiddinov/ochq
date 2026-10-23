@@ -8,6 +8,20 @@ ochq 3000
 # → https://x8k2.ochq.uz  →  http://localhost:3000
 ```
 
+```
+[✓] Status:       Online
+[✓] Forwarding:   http://localhost:3000
+[✓] Public URL:   http://demo.95.111.255.160.nip.io:8080
+
+Logs (Ctrl+C to stop):
+14:02:07  GET    /api/v1/health     200 OK         14ms
+14:02:09  POST   /auth/login        401 Unauthorized  42ms
+```
+
+The client reconnects on its own with exponential backoff when the network
+drops, and keeps its subdomain. Settings can come from the environment:
+`OCHQ_SERVER`, `OCHQ_TOKEN`, `OCHQ_FINGERPRINT`; `NO_COLOR` disables colors.
+
 > **Status:** early development (Milestone 1 — core engine). See
 > [PROJECT_SPEC.md](PROJECT_SPEC.md) for the architecture and roadmap.
 

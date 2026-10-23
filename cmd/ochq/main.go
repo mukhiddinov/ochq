@@ -15,17 +15,42 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/mukhiddinov/ochq/internal/client"
 	"github.com/mukhiddinov/ochq/internal/proto"
+	"github.com/mukhiddinov/ochq/internal/tlsutil"
+	"github.com/mukhiddinov/ochq/internal/ui"
 	"github.com/mukhiddinov/ochq/pkg/version"
 )
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "ochq:", err)
+		if hint := hintFor(err); hint != "" {
+			fmt.Fprintln(os.Stderr, "hint:", hint)
+		}
 		os.Exit(1)
 	}
+}
+
+// hintFor suggests a fix for errors a user can act on.
+func hintFor(err error) string {
+	var he *proto.HandshakeError
+	if errors.As(err, &he) {
+		switch he.Code {
+		case proto.ErrCodeUnauthorized:
+			return "set OCHQ_TOKEN or pass --token (ask the server admin for it)"
+		case proto.ErrCodeSubdomainTaken:
+			return "pick another --sub, or omit it for a random one"
+		case proto.ErrCodeVersionMismatch:
+			return "update ochq to match the server"
+		}
+	}
+	if errors.Is(err, tlsutil.ErrFingerprintMismatch) {
+		return "if the server key was rotated on purpose, update OCHQ_FINGERPRINT; otherwise do not connect"
+	}
+	return ""
 }
 
 func run(args []string) error {
@@ -76,7 +101,14 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Printf("Connecting to %s ...\n", *server)
+	out := ui.New(os.Stdout)
+	out.Banner(version.Version)
+	localURL := "http://" + displayAddr(localAddr)
+	if !listening(localAddr) {
+		out.Warn(fmt.Sprintf("nothing is listening on %s yet — visitors get 502 until it starts", localURL))
+	}
+	out.Connecting(*server)
+
 	return client.Run(ctx, client.Config{
 		ServerAddr:  *server,
 		LocalAddr:   localAddr,
@@ -84,10 +116,30 @@ func run(args []string) error {
 		Token:       *token,
 		Fingerprint: *fingerprint,
 		OnReady: func(resp *proto.HelloResponse) {
-			fmt.Printf("Forwarding  %s -> http://%s\n", resp.PublicURL, localAddr)
-			fmt.Println("Press Ctrl+C to stop.")
+			out.Online(resp.PublicURL, localURL)
+		},
+		OnReconnect: out.Reconnecting,
+		OnRequest: func(r client.RequestLog) {
+			out.Request(r.Method, r.Path, r.Status, r.Duration)
 		},
 	})
+}
+
+func listening(addr string) bool {
+	conn, err := net.DialTimeout("tcp", addr, time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+// displayAddr shows 127.0.0.1:3000 as localhost:3000, like the user typed it.
+func displayAddr(addr string) string {
+	if host, port, err := net.SplitHostPort(addr); err == nil && host == "127.0.0.1" {
+		return "localhost:" + port
+	}
+	return addr
 }
 
 // parseInterspersed lets flags appear before and after positional args.

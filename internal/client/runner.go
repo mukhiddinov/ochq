@@ -1,13 +1,17 @@
 // Package client implements the ochq side of a tunnel: it connects to
-// ochqd and forwards every incoming stream to a local service.
+// ochqd and serves every incoming stream by proxying it to a local service.
 package client
 
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
+	"log"
+	"math/rand/v2"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/yamux"
@@ -20,7 +24,17 @@ import (
 const (
 	dialTimeout      = 10 * time.Second
 	localDialTimeout = 5 * time.Second
+
+	defaultMinBackoff = time.Second
+	defaultMaxBackoff = 30 * time.Second
+	// A session that stayed up this long resets the backoff, so a single
+	// blip after hours of uptime reconnects after MinBackoff again.
+	stableSession = time.Minute
 )
+
+// A yamux session hands out streams like a listener hands out connections,
+// which is what lets an ordinary http.Server serve the tunnel.
+var _ net.Listener = (*yamux.Session)(nil)
 
 type Config struct {
 	ServerAddr string // ochqd tunnel address, e.g. "tunnel.ochq.uz:9000"
@@ -31,19 +45,76 @@ type Config struct {
 	// Empty means the certificate must be signed by a trusted CA.
 	Fingerprint string
 
-	// OnReady, if set, is called once the tunnel is up.
+	// OnReady is called every time the tunnel comes up, including after
+	// a reconnect.
 	OnReady func(*proto.HelloResponse)
+	// OnReconnect is called after a session ends, before waiting delay.
+	OnReconnect func(attempt int, delay time.Duration, err error)
+	// OnRequest is called when a proxied request completes.
+	OnRequest func(RequestLog)
+
+	// Bounds for the exponential reconnect backoff (default 1s and 30s).
+	MinBackoff, MaxBackoff time.Duration
 }
 
-// Run opens a tunnel and serves it until ctx is cancelled (returns nil)
-// or the connection to the server is lost (returns an error).
+// Run keeps the tunnel up until ctx is cancelled (then it returns nil).
+// When the connection drops it reconnects with exponential backoff, asking
+// for the same subdomain so the public URL survives. Errors that retrying
+// cannot fix — bad token, fingerprint mismatch, invalid subdomain — are
+// returned immediately.
 func Run(ctx context.Context, cfg Config) error {
-	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
-	defer cancel()
+	if cfg.MinBackoff <= 0 {
+		cfg.MinBackoff = defaultMinBackoff
+	}
+	if cfg.MaxBackoff <= 0 {
+		cfg.MaxBackoff = defaultMaxBackoff
+	}
+	handler := logRequests(newLocalProxy(cfg.LocalAddr), cfg.OnRequest)
+
+	connected := false
+	for attempt := 0; ; {
+		start := time.Now()
+		err := runSession(ctx, cfg, handler, func(resp *proto.HelloResponse) {
+			// Come back on the same URL after a reconnect.
+			cfg.Subdomain = resp.Subdomain
+			connected = true
+			if cfg.OnReady != nil {
+				cfg.OnReady(resp)
+			}
+		})
+		if ctx.Err() != nil {
+			return nil
+		}
+		if permanent(err, connected) {
+			return err
+		}
+
+		if time.Since(start) >= stableSession {
+			attempt = 0
+		}
+		delay := backoff(attempt, cfg.MinBackoff, cfg.MaxBackoff)
+		attempt++
+		if cfg.OnReconnect != nil {
+			cfg.OnReconnect(attempt, delay, err)
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(delay):
+		}
+	}
+}
+
+// runSession connects once and serves the tunnel until it closes.
+func runSession(ctx context.Context, cfg Config, handler http.Handler, onReady func(*proto.HelloResponse)) error {
 	host, _, err := net.SplitHostPort(cfg.ServerAddr)
 	if err != nil {
 		return fmt.Errorf("invalid server address %q: %w", cfg.ServerAddr, err)
 	}
+
+	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
 	// tls.Dialer completes the TLS handshake (and our certificate checks)
 	// before returning, so a bad pin fails here, before the token is sent.
 	d := tls.Dialer{Config: tlsutil.ClientConfig(host, cfg.Fingerprint)}
@@ -65,24 +136,19 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	defer session.Close()
 
-	if cfg.OnReady != nil {
-		cfg.OnReady(resp)
-	}
+	onReady(resp)
 
-	// Closing the session unblocks Accept below when ctx is cancelled.
+	// Closing the session makes Serve return when ctx is cancelled.
 	stop := context.AfterFunc(ctx, func() { session.Close() })
 	defer stop()
 
-	for {
-		stream, err := session.Accept()
-		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return fmt.Errorf("tunnel closed: %w", err)
-		}
-		go forward(stream, cfg.LocalAddr)
+	srv := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 30 * time.Second,
+		ErrorLog:          log.New(io.Discard, "", 0),
 	}
+	err = srv.Serve(session)
+	return fmt.Errorf("connection to server lost: %w", err)
 }
 
 func handshake(conn net.Conn, cfg Config) (*proto.HelloResponse, error) {
@@ -109,41 +175,34 @@ func handshake(conn net.Conn, cfg Config) (*proto.HelloResponse, error) {
 	return resp, nil
 }
 
-// forward pipes one tunnel stream to a fresh connection to the local service.
-func forward(stream net.Conn, localAddr string) {
-	defer stream.Close()
-
-	local, err := net.DialTimeout("tcp", localAddr, localDialTimeout)
-	if err != nil {
-		writeBadGateway(stream, localAddr, err)
-		return
+// permanent reports whether retrying cannot help.
+func permanent(err error, connectedBefore bool) bool {
+	var he *proto.HandshakeError
+	if errors.As(err, &he) {
+		switch he.Code {
+		case proto.ErrCodeInternal:
+			return false
+		case proto.ErrCodeSubdomainTaken:
+			// After a drop the server may still hold our old session until
+			// its keepalive notices; wait for it to let go.
+			return !connectedBefore
+		default:
+			return true
+		}
 	}
-	defer local.Close()
-
-	join(stream, local)
+	var uv *tlsutil.UnverifiedError
+	return errors.As(err, &uv) || errors.Is(err, tlsutil.ErrFingerprintMismatch)
 }
 
-// join copies bytes both ways and returns as soon as either side is done;
-// the caller's deferred Close calls then unblock the other direction.
-func join(a, b net.Conn) {
-	done := make(chan struct{}, 2)
-	pipe := func(dst, src net.Conn) {
-		io.Copy(dst, src)
-		done <- struct{}{}
+// backoff doubles the delay per attempt up to max, with ±20% jitter so many
+// clients dropped by the same server restart do not reconnect in lockstep.
+func backoff(attempt int, min, max time.Duration) time.Duration {
+	d := max
+	if attempt < 30 && min<<attempt < max {
+		d = min << attempt
 	}
-	go pipe(a, b)
-	go pipe(b, a)
-	<-done
-}
-
-// writeBadGateway answers the waiting HTTP request directly, so the visitor
-// sees why the page failed instead of a bare connection reset.
-func writeBadGateway(w io.Writer, localAddr string, cause error) {
-	body := fmt.Sprintf("ochq: could not reach local service at %s: %v\n", localAddr, cause)
-	fmt.Fprintf(w, "HTTP/1.1 502 Bad Gateway\r\n"+
-		"Content-Type: text/plain; charset=utf-8\r\n"+
-		"Content-Length: %d\r\n"+
-		"Connection: close\r\n\r\n%s", len(body), body)
+	jitter := time.Duration(rand.Int64N(int64(d)/5*2+1)) - d/5
+	return d + jitter
 }
 
 func yamuxConfig() *yamux.Config {
