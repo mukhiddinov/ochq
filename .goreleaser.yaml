@@ -3,6 +3,10 @@
 version: 2
 project_name: ochq
 
+before:
+  hooks:
+    - ./packaging/completions.sh
+
 builds:
   - id: ochq
     main: ./cmd/ochq
@@ -24,7 +28,7 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
-    files: [LICENSE, README.md]
+    files: [LICENSE, README.md, completions/*]
 
 checksum:
   name_template: checksums.txt
@@ -58,6 +62,17 @@ nfpms:
         dst: /usr/share/doc/ochq/README.md
         type: doc
         packager: rpm
+      # Shell completion, picked up automatically by bash-completion, zsh
+      # and fish on both Debian and Fedora layouts.
+      - src: completions/ochq.bash
+        dst: /usr/share/bash-completion/completions/ochq
+        file_info: { mode: 0644 }
+      - src: completions/ochq.zsh
+        dst: /usr/share/zsh/site-functions/_ochq
+        file_info: { mode: 0644 }
+      - src: completions/ochq.fish
+        dst: /usr/share/fish/vendor_completions.d/ochq.fish
+        file_info: { mode: 0644 }
 
 homebrew_casks:
   - name: ochq
@@ -69,6 +84,10 @@ homebrew_casks:
     description: Expose a local port to the internet through an OCHQ tunnel
     license: MIT
     binaries: [ochq]
+    completions:
+      bash: completions/ochq.bash
+      zsh: completions/ochq.zsh
+      fish: completions/ochq.fish
     hooks:
       post:
         # The binary is not notarized by Apple; without this Gatekeeper

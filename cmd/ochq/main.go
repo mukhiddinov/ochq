@@ -7,175 +7,25 @@ package main
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
-	"net"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/mukhiddinov/ochq/internal/client"
-	"github.com/mukhiddinov/ochq/internal/proto"
-	"github.com/mukhiddinov/ochq/internal/tlsutil"
-	"github.com/mukhiddinov/ochq/internal/ui"
-	"github.com/mukhiddinov/ochq/pkg/version"
 )
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	cmd := newRootCmd(client.Run, os.Stdout)
+	cmd.SetArgs(compatArgs(os.Args[1:]))
+	if err := cmd.ExecuteContext(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, "ochq:", err)
 		if hint := hintFor(err); hint != "" {
 			fmt.Fprintln(os.Stderr, "hint:", hint)
 		}
 		os.Exit(1)
 	}
-}
-
-// hintFor suggests a fix for errors a user can act on.
-func hintFor(err error) string {
-	var he *proto.HandshakeError
-	if errors.As(err, &he) {
-		switch he.Code {
-		case proto.ErrCodeUnauthorized:
-			return "set OCHQ_TOKEN or pass --token (ask the server admin for it)"
-		case proto.ErrCodeSubdomainTaken:
-			return "pick another --sub, or omit it for a random one"
-		case proto.ErrCodeVersionMismatch:
-			return "update ochq to match the server"
-		}
-	}
-	if errors.Is(err, tlsutil.ErrFingerprintMismatch) {
-		return "if the server key was rotated on purpose, update OCHQ_FINGERPRINT; otherwise do not connect"
-	}
-	return ""
-}
-
-func run(args []string) error {
-	fs := flag.NewFlagSet("ochq", flag.ContinueOnError)
-	server := fs.String("server", envOr("OCHQ_SERVER", "localhost:9000"), "ochqd tunnel address (host:port) [$OCHQ_SERVER]")
-	sub := fs.String("sub", "", "requested subdomain (random if empty)")
-	token := fs.String("token", os.Getenv("OCHQ_TOKEN"), "auth token, if the server requires one [$OCHQ_TOKEN]")
-	fingerprint := fs.String("fingerprint", os.Getenv("OCHQ_FINGERPRINT"), "pin the server's self-signed TLS key, e.g. SHA256:... [$OCHQ_FINGERPRINT]")
-	showVersion := fs.Bool("version", false, "print version and exit")
-	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(), "Usage: ochq [http] <port> [flags]\n\nFlags:\n")
-		fs.PrintDefaults()
-	}
-
-	positional, err := parseInterspersed(fs, args)
-	if errors.Is(err, flag.ErrHelp) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if *showVersion {
-		fmt.Println("ochq", version.Version)
-		return nil
-	}
-
-	if len(positional) > 0 && positional[0] == "http" {
-		positional = positional[1:]
-	}
-	if len(positional) != 1 {
-		fs.Usage()
-		return errors.New("expected exactly one port, e.g. `ochq 3000`")
-	}
-	localAddr, err := parseLocalAddr(positional[0])
-	if err != nil {
-		return err
-	}
-
-	// Validate early for a clear message instead of a server round-trip.
-	if *sub != "" {
-		normalized, err := proto.NormalizeSubdomain(*sub)
-		if err != nil {
-			return fmt.Errorf("invalid --sub %q: use 3-63 letters, digits or hyphens", *sub)
-		}
-		*sub = normalized
-	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	out := ui.New(os.Stdout)
-	out.Banner(version.Version)
-	localURL := "http://" + displayAddr(localAddr)
-	if !listening(localAddr) {
-		out.Warn(fmt.Sprintf("nothing is listening on %s yet — visitors get 502 until it starts", localURL))
-	}
-	out.Connecting(*server)
-
-	return client.Run(ctx, client.Config{
-		ServerAddr:  *server,
-		LocalAddr:   localAddr,
-		Subdomain:   *sub,
-		Token:       *token,
-		Fingerprint: *fingerprint,
-		OnReady: func(resp *proto.HelloResponse) {
-			out.Online(resp.PublicURL, localURL)
-		},
-		OnReconnect: out.Reconnecting,
-		OnRequest: func(r client.RequestLog) {
-			out.Request(r.Method, r.Path, r.Status, r.Duration)
-		},
-	})
-}
-
-func listening(addr string) bool {
-	conn, err := net.DialTimeout("tcp", addr, time.Second)
-	if err != nil {
-		return false
-	}
-	conn.Close()
-	return true
-}
-
-// displayAddr shows 127.0.0.1:3000 as localhost:3000, like the user typed it.
-func displayAddr(addr string) string {
-	if host, port, err := net.SplitHostPort(addr); err == nil && host == "127.0.0.1" {
-		return "localhost:" + port
-	}
-	return addr
-}
-
-// parseInterspersed lets flags appear before and after positional args.
-// The standard flag package stops at the first positional argument, so we
-// collect it and keep parsing the rest.
-func parseInterspersed(fs *flag.FlagSet, args []string) ([]string, error) {
-	var positional []string
-	for {
-		if err := fs.Parse(args); err != nil {
-			return nil, err
-		}
-		args = fs.Args()
-		if len(args) == 0 {
-			return positional, nil
-		}
-		positional = append(positional, args[0])
-		args = args[1:]
-	}
-}
-
-// parseLocalAddr accepts "3000" or "host:3000".
-func parseLocalAddr(s string) (string, error) {
-	host, portStr := "127.0.0.1", s
-	if h, p, err := net.SplitHostPort(s); err == nil {
-		host, portStr = h, p
-	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil || port < 1 || port > 65535 {
-		return "", fmt.Errorf("invalid port %q", s)
-	}
-	return net.JoinHostPort(host, strconv.Itoa(port)), nil
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
