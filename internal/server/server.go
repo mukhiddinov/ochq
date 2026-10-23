@@ -179,6 +179,9 @@ func (s *Server) claim(hello *proto.Hello) (string, *proto.HandshakeError) {
 	if hello.Type != proto.TunnelHTTP {
 		return reject(proto.ErrCodeBadRequest, "unsupported tunnel type %q", hello.Type)
 	}
+	if s.cfg.Token != "" && hello.Token == "" {
+		return reject(proto.ErrCodeUnauthorized, "this server requires a token")
+	}
 	if s.cfg.Token != "" && subtle.ConstantTimeCompare([]byte(hello.Token), []byte(s.cfg.Token)) != 1 {
 		return reject(proto.ErrCodeUnauthorized, "invalid token")
 	}
