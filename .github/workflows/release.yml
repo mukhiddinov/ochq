@@ -1,0 +1,89 @@
+name: release
+
+# git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: go test -race ./...
+
+  goreleaser:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # changelog needs the history
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2.18"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Fine-grained PAT with contents:write on homebrew-tap and
+          # scoop-bucket; GITHUB_TOKEN cannot push to other repositories.
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+  # Rebuild the signed apt/dnf repository from the latest releases and
+  # publish it on GitHub Pages. Pre-releases (v1.2.0-rc.1) are skipped.
+  packages:
+    needs: goreleaser
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      BASE_URL: ${{ vars.PKG_BASE_URL || format('https://{0}.github.io/{1}', github.repository_owner, github.event.repository.name) }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install repository tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq apt-utils createrepo-c
+
+      - name: Import signing key
+        env:
+          PKG_SIGNING_KEY: ${{ secrets.PKG_SIGNING_KEY }}
+        run: |
+          printf '%s\n' "$PKG_SIGNING_KEY" | gpg --batch --import
+          echo "KEY_ID=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/{print $10; exit}')" >> "$GITHUB_ENV"
+
+      - name: Download packages of the last 5 releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p pkgs
+          gh release list --exclude-pre-releases --limit 5 --json tagName -q '.[].tagName' |
+            while read -r tag; do
+              gh release download "$tag" --dir pkgs --pattern '*.deb' --pattern '*.rpm'
+            done
+          ls -l pkgs
+
+      - name: Build repository
+        run: packaging/build-repo.sh pkgs site "$KEY_ID" "$BASE_URL"
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v5
