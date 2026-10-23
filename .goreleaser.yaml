@@ -1,0 +1,108 @@
+# Release pipeline for the ochq client: `git tag vX.Y.Z && git push --tags`.
+# Local dry run: goreleaser release --snapshot --clean
+version: 2
+project_name: ochq
+
+builds:
+  - id: ochq
+    main: ./cmd/ochq
+    binary: ochq
+    env: [CGO_ENABLED=0]
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w -X github.com/mukhiddinov/ochq/pkg/version.Version={{ .Version }}
+    # Reproducible builds: same commit, same bytes.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: ochq
+    ids: [ochq]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files: [LICENSE, README.md]
+
+checksum:
+  name_template: checksums.txt
+
+nfpms:
+  - id: ochq
+    ids: [ochq]
+    package_name: ochq
+    file_name_template: "{{ .ConventionalFileName }}"
+    vendor: OCHQ
+    homepage: https://github.com/mukhiddinov/ochq
+    maintainer: Mukhiddinov <muxiddinovxusniddin34@gmail.com>
+    description: |-
+      Expose a local port to the internet through an OCHQ tunnel.
+      ochq connects to an ochqd server and gives your localhost a public URL.
+    license: MIT
+    section: net
+    formats: [deb, rpm]
+    bindir: /usr/bin
+    # Each format has its own convention for the license file; nfpm's
+    # `type: license|doc` only applies to rpm and is dropped from debs.
+    contents:
+      - src: LICENSE
+        dst: /usr/share/doc/ochq/copyright
+        packager: deb
+      - src: LICENSE
+        dst: /usr/share/licenses/ochq/LICENSE
+        type: license
+        packager: rpm
+      - src: README.md
+        dst: /usr/share/doc/ochq/README.md
+        type: doc
+        packager: rpm
+
+homebrew_casks:
+  - name: ochq
+    repository:
+      owner: mukhiddinov
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/mukhiddinov/ochq
+    description: Expose a local port to the internet through an OCHQ tunnel
+    license: MIT
+    binaries: [ochq]
+    hooks:
+      post:
+        # The binary is not notarized by Apple; without this Gatekeeper
+        # refuses to run it.
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/ochq"]
+          end
+
+scoops:
+  - name: ochq
+    repository:
+      owner: mukhiddinov
+      name: scoop-bucket
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/mukhiddinov/ochq
+    description: Expose a local port to the internet through an OCHQ tunnel
+    license: MIT
+
+changelog:
+  use: git
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude: ["^chore", "^ci", "^docs", "^test"]
+
+release:
+  # v0.2.0-rc.1 and similar tags become GitHub pre-releases.
+  prerelease: auto
