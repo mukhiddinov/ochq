@@ -5,6 +5,7 @@ package server
 import (
 	"context"
 	"crypto/subtle"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"log/slog"
@@ -27,7 +28,9 @@ type Config struct {
 	PublicScheme string
 	PublicPort   int
 	// Token, if set, must match Hello.Token.
-	Token  string
+	Token string
+	// TLS secures the tunnel listener. Nil means plaintext (tests only).
+	TLS    *tls.Config
 	Logger *slog.Logger
 }
 
@@ -66,6 +69,12 @@ func (s *Server) ListenAndServe(ctx context.Context, tunnelAddr, httpAddr string
 
 // Serve is like ListenAndServe but uses the given listeners.
 func (s *Server) Serve(ctx context.Context, tunnelLn, httpLn net.Listener) error {
+	if s.cfg.TLS != nil {
+		// The TLS handshake runs lazily on the first read, i.e. inside
+		// handshake() and under its deadline, so a client that connects and
+		// stalls cannot block the accept loop.
+		tunnelLn = tls.NewListener(tunnelLn, s.cfg.TLS)
+	}
 	httpSrv := &http.Server{
 		Handler:           s,
 		ReadHeaderTimeout: 10 * time.Second,
