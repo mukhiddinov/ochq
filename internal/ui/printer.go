@@ -12,14 +12,6 @@ import (
 	"time"
 )
 
-const banner = `              _
-  ___   ___  | |__    __ _
- / _ \ / __| | '_ \  / _` + "`" + ` |
-| (_) | (__  | | | || (_| |
- \___/ \___| |_| |_| \__, |   %s
-                        |_|   Open Channels, Handle Queries
-`
-
 const maxPathWidth = 48
 
 // ANSI SGR codes.
@@ -35,16 +27,20 @@ const (
 
 // Printer is safe for concurrent use: requests finish on many goroutines.
 type Printer struct {
-	mu        sync.Mutex
-	w         io.Writer
-	color     bool
-	now       func() time.Time
-	shownLogs bool // the "Logs" heading is printed once, not after every reconnect
+	mu           sync.Mutex
+	w            io.Writer
+	tty          bool // cursor movement works: animate, restore on Close
+	color        bool
+	now          func() time.Time
+	shownLogs    bool // the "Logs" heading is printed once, not after every reconnect
+	styledCursor bool // AnimateBanner changed the cursor shape
 }
 
-// New writes to w, with colors if w is a terminal and NO_COLOR is unset.
+// New writes to w. On a terminal it animates the banner and, unless
+// NO_COLOR is set, uses colors; anywhere else it writes plain text.
 func New(w io.Writer) *Printer {
-	return &Printer{w: w, color: isTerminal(w) && os.Getenv("NO_COLOR") == "", now: time.Now}
+	tty := isTerminal(w) && os.Getenv("TERM") != "dumb"
+	return &Printer{w: w, tty: tty, color: tty && os.Getenv("NO_COLOR") == "", now: time.Now}
 }
 
 func isTerminal(w io.Writer) bool {
@@ -53,7 +49,7 @@ func isTerminal(w io.Writer) bool {
 		return false
 	}
 	info, err := f.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
+	return err == nil && info.Mode()&os.ModeCharDevice != 0 && enableVT(f)
 }
 
 func (p *Printer) paint(code, s string) string {
@@ -67,10 +63,6 @@ func (p *Printer) printf(format string, args ...any) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	fmt.Fprintf(p.w, format, args...)
-}
-
-func (p *Printer) Banner(version string) {
-	p.printf("%s\n", p.paint(cyan, fmt.Sprintf(banner, version)))
 }
 
 func (p *Printer) Connecting(server string) {

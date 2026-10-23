@@ -161,7 +161,9 @@ func runTunnel(cmd *cobra.Command, run runFunc, out io.Writer, o *tunnelOptions,
 	}
 
 	printer := ui.New(out)
-	printer.Banner(version.Version)
+	// Types the logo while the tunnel connects; later output waits for it.
+	printer.AnimateBanner(cmd.Context(), version.Version)
+	defer printer.Close()
 	localURL := "http://" + displayAddr(localAddr)
 	if !listening(localAddr) {
 		printer.Warn(fmt.Sprintf("nothing is listening on %s yet — visitors get 502 until it starts", localURL))
