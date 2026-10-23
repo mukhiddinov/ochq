@@ -17,8 +17,11 @@ if [[ $EUID -ne 0 ]]; then
     echo "run as root (sudo)" >&2
     exit 1
 fi
-if [[ ! "$DEPLOY_PUBKEY" =~ ^ssh-(ed25519|rsa)\  ]]; then
+# Validate with ssh-keygen: a placeholder or truncated paste must not end up
+# in authorized_keys, where it would silently lock CI out.
+if ! ssh-keygen -l -f - <<<"$DEPLOY_PUBKEY" >/dev/null 2>&1; then
     echo "usage: setup-vps.sh '<deploy public key>'" >&2
+    echo "  not a valid SSH public key: ${DEPLOY_PUBKEY:0:40}..." >&2
     exit 2
 fi
 for cmd in systemctl sudo runuser visudo ss getent; do
