@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -14,12 +15,18 @@ import (
 
 	"github.com/mukhiddinov/ochq/internal/proto"
 	"github.com/mukhiddinov/ochq/internal/server"
+	"github.com/mukhiddinov/ochq/internal/tlsutil"
 )
 
-// startServer runs ochqd on random loopback ports and returns the tunnel
-// address and the public HTTP base URL.
-func startServer(t *testing.T, ctx context.Context) (tunnelAddr, httpURL string) {
+// startServer runs ochqd with a self-signed TLS certificate on random
+// loopback ports. It returns the tunnel address, the public HTTP base URL
+// and the certificate fingerprint clients must pin.
+func startServer(t *testing.T, ctx context.Context) (tunnelAddr, httpURL, fingerprint string) {
 	t.Helper()
+	cert, err := tlsutil.SelfSigned()
+	if err != nil {
+		t.Fatal(err)
+	}
 	tunnelLn, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -28,9 +35,9 @@ func startServer(t *testing.T, ctx context.Context) (tunnelAddr, httpURL string)
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := server.New(server.Config{Domain: "ochq.test"})
+	srv := server.New(server.Config{Domain: "ochq.test", TLS: tlsutil.ServerConfig(cert)})
 	go srv.Serve(ctx, tunnelLn, httpLn)
-	return tunnelLn.Addr().String(), "http://" + httpLn.Addr().String()
+	return tunnelLn.Addr().String(), "http://" + httpLn.Addr().String(), tlsutil.Fingerprint(cert.Leaf)
 }
 
 // startClient runs the tunnel and waits until it is ready.
@@ -78,12 +85,13 @@ func TestTunnelEndToEnd(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tunnelAddr, httpURL := startServer(t, ctx)
+	tunnelAddr, httpURL, fp := startServer(t, ctx)
 
 	resp, errc := startClient(t, ctx, Config{
-		ServerAddr: tunnelAddr,
-		LocalAddr:  local.Listener.Addr().String(),
-		Subdomain:  "demo",
+		ServerAddr:  tunnelAddr,
+		LocalAddr:   local.Listener.Addr().String(),
+		Subdomain:   "demo",
+		Fingerprint: fp,
 	})
 	if resp.Subdomain != "demo" || resp.PublicURL != "http://demo.ochq.test" {
 		t.Fatalf("unexpected hello response %+v", resp)
@@ -124,8 +132,8 @@ func TestLocalServiceDown(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tunnelAddr, httpURL := startServer(t, ctx)
-	resp, _ := startClient(t, ctx, Config{ServerAddr: tunnelAddr, LocalAddr: deadAddr})
+	tunnelAddr, httpURL, fp := startServer(t, ctx)
+	resp, _ := startClient(t, ctx, Config{ServerAddr: tunnelAddr, LocalAddr: deadAddr, Fingerprint: fp})
 
 	host := resp.Subdomain + ".ochq.test"
 	code, body := get(t, "GET", httpURL+"/", host, "")
@@ -137,11 +145,55 @@ func TestLocalServiceDown(t *testing.T) {
 func TestSubdomainTaken(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	tunnelAddr, _ := startServer(t, ctx)
-	startClient(t, ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "demo"})
+	tunnelAddr, _, fp := startServer(t, ctx)
+	startClient(t, ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "demo", Fingerprint: fp})
 
-	err := Run(ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "demo"})
+	err := Run(ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "demo", Fingerprint: fp})
 	if err == nil || !strings.Contains(err.Error(), string(proto.ErrCodeSubdomainTaken)) {
 		t.Fatalf("got %v, want subdomain_taken", err)
+	}
+}
+
+func TestTLSVerification(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tunnelAddr, _, fp := startServer(t, ctx)
+
+	other, err := tlsutil.SelfSigned()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A different pin is what an interception would look like.
+	err = Run(ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Fingerprint: tlsutil.Fingerprint(other.Leaf)})
+	if err == nil || !strings.Contains(err.Error(), "fingerprint mismatch") {
+		t.Fatalf("wrong pin: got %v", err)
+	}
+
+	// No pin: the error must tell the user which fingerprint to verify.
+	err = Run(ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1"})
+	var uv *tlsutil.UnverifiedError
+	if !errors.As(err, &uv) || uv.Fingerprint != fp {
+		t.Fatalf("no pin: got %v, want UnverifiedError with %s", err, fp)
+	}
+}
+
+// A plaintext client must not get anywhere near the handshake.
+func TestPlaintextClientRejected(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tunnelAddr, _, _ := startServer(t, ctx)
+
+	conn, err := net.Dial("tcp", tunnelAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := proto.WriteHello(conn, &proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := proto.ReadHelloResponse(conn); err == nil {
+		t.Fatal("plaintext client completed the handshake")
 	}
 }

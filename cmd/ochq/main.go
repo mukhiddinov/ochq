@@ -33,6 +33,7 @@ func run(args []string) error {
 	server := fs.String("server", envOr("OCHQ_SERVER", "localhost:9000"), "ochqd tunnel address (host:port) [$OCHQ_SERVER]")
 	sub := fs.String("sub", "", "requested subdomain (random if empty)")
 	token := fs.String("token", os.Getenv("OCHQ_TOKEN"), "auth token, if the server requires one [$OCHQ_TOKEN]")
+	fingerprint := fs.String("fingerprint", os.Getenv("OCHQ_FINGERPRINT"), "pin the server's self-signed TLS key, e.g. SHA256:... [$OCHQ_FINGERPRINT]")
 	showVersion := fs.Bool("version", false, "print version and exit")
 	fs.Usage = func() {
 		fmt.Fprintf(fs.Output(), "Usage: ochq [http] <port> [flags]\n\nFlags:\n")
@@ -65,9 +66,11 @@ func run(args []string) error {
 
 	// Validate early for a clear message instead of a server round-trip.
 	if *sub != "" {
-		if *sub, err = proto.NormalizeSubdomain(*sub); err != nil {
+		normalized, err := proto.NormalizeSubdomain(*sub)
+		if err != nil {
 			return fmt.Errorf("invalid --sub %q: use 3-63 letters, digits or hyphens", *sub)
 		}
+		*sub = normalized
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -75,10 +78,11 @@ func run(args []string) error {
 
 	fmt.Printf("Connecting to %s ...\n", *server)
 	return client.Run(ctx, client.Config{
-		ServerAddr: *server,
-		LocalAddr:  localAddr,
-		Subdomain:  *sub,
-		Token:      *token,
+		ServerAddr:  *server,
+		LocalAddr:   localAddr,
+		Subdomain:   *sub,
+		Token:       *token,
+		Fingerprint: *fingerprint,
 		OnReady: func(resp *proto.HelloResponse) {
 			fmt.Printf("Forwarding  %s -> http://%s\n", resp.PublicURL, localAddr)
 			fmt.Println("Press Ctrl+C to stop.")

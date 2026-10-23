@@ -8,6 +8,14 @@ Wants=network-online.target
 Type=simple
 User=ochq
 Group=ochq
+# /var/lib/ochq, owned by ochq and writable despite ProtectSystem=strict.
+# Holds the self-signed tunnel certificate so its fingerprint survives
+# restarts and deploys.
+StateDirectory=ochq
+StateDirectoryMode=0700
+# Read via env (not a flag in ExecStart) so this unit also works with older
+# binaries that do not know -tls-dir. ochqd.env can override it.
+Environment=OCHQD_TLS_DIR=/var/lib/ochq/tls
 EnvironmentFile=/etc/ochq/ochqd.env
 # /opt/ochq/current is a symlink to the active release (see ochq-deploy).
 ExecStart=/opt/ochq/current/ochqd \

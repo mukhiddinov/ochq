@@ -4,6 +4,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"github.com/hashicorp/yamux"
 
 	"github.com/mukhiddinov/ochq/internal/proto"
+	"github.com/mukhiddinov/ochq/internal/tlsutil"
 	"github.com/mukhiddinov/ochq/pkg/version"
 )
 
@@ -25,6 +27,9 @@ type Config struct {
 	LocalAddr  string // local service, e.g. "127.0.0.1:3000"
 	Subdomain  string // requested subdomain; empty lets the server pick
 	Token      string
+	// Fingerprint pins the server's self-signed key ("SHA256:...").
+	// Empty means the certificate must be signed by a trusted CA.
+	Fingerprint string
 
 	// OnReady, if set, is called once the tunnel is up.
 	OnReady func(*proto.HelloResponse)
@@ -35,7 +40,13 @@ type Config struct {
 func Run(ctx context.Context, cfg Config) error {
 	dialCtx, cancel := context.WithTimeout(ctx, dialTimeout)
 	defer cancel()
-	var d net.Dialer
+	host, _, err := net.SplitHostPort(cfg.ServerAddr)
+	if err != nil {
+		return fmt.Errorf("invalid server address %q: %w", cfg.ServerAddr, err)
+	}
+	// tls.Dialer completes the TLS handshake (and our certificate checks)
+	// before returning, so a bad pin fails here, before the token is sent.
+	d := tls.Dialer{Config: tlsutil.ClientConfig(host, cfg.Fingerprint)}
 	conn, err := d.DialContext(dialCtx, "tcp", cfg.ServerAddr)
 	if err != nil {
 		return fmt.Errorf("connect to %s: %w", cfg.ServerAddr, err)
