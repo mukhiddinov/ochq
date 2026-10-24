@@ -1,5 +1,5 @@
 # Release pipeline for the ochq client: `git tag vX.Y.Z && git push --tags`.
-# Local dry run: goreleaser release --snapshot --clean
+# Local dry run: goreleaser release --snapshot --clean --skip=snapcraft
 version: 2
 project_name: ochq
 
@@ -73,6 +73,42 @@ nfpms:
       - src: completions/ochq.fish
         dst: /usr/share/fish/vendor_completions.d/ochq.fish
         file_info: { mode: 0644 }
+
+# Snap Store: `sudo snap install ochq` on Ubuntu and anywhere snapd runs.
+# Needs snapcraft; the release workflow skips it (--skip=snapcraft) when the
+# store credentials are not configured, and so can a local snapshot.
+snapcrafts:
+  - id: ochq
+    ids: [ochq]
+    name: ochq
+    title: OCHQ
+    summary: Expose a local port to the internet with one command
+    description: |-
+      ochq gives the service on your localhost a public HTTPS URL, such as
+      https://my-app.ochq.uz, through an encrypted tunnel. No account, router
+      setup or config file: run `ochq 3000` and share the link.
+
+      Handy for testing webhooks (Telegram bots, payment callbacks), showing
+      work in progress, or opening your site on a phone. Every request shows
+      up in a live log. ochq comes from the Uzbek word "ochiq", meaning open.
+    license: MIT
+    base: core24
+    grade: stable
+    confinement: strict
+    publish: true
+    channel_templates:
+      - '{{ if .Prerelease }}beta{{ else }}stable{{ end }}'
+    extra_files:
+      - source: completions/ochq.bash
+        destination: completions/ochq.bash
+        mode: 0644
+    apps:
+      ochq:
+        command: ochq
+        # The client only dials out: to the tunnel server and to the local
+        # service it exposes.
+        plugs: [network]
+        completer: completions/ochq.bash
 
 homebrew_casks:
   - name: ochq

@@ -23,6 +23,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write # create the GitHub Release
+    env:
+      # Snap Store login from `snapcraft export-login`; empty until set up.
+      SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -30,10 +33,15 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - name: Install snapcraft
+        if: ${{ env.SNAPCRAFT_STORE_CREDENTIALS != '' }}
+        run: sudo snap install snapcraft --classic
       - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2.18"
-          args: release --clean
+          # The snap is built and published only once the Snap Store login
+          # (snapcraft export-login) is stored as a secret.
+          args: release --clean ${{ env.SNAPCRAFT_STORE_CREDENTIALS == '' && '--skip=snapcraft' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Fine-grained PAT with contents:write on homebrew-tap and
