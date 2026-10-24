@@ -43,12 +43,14 @@ func TestTunnelInvocations(t *testing.T) {
 		server string
 		token  string
 	}{
-		{args: []string{"3000"}, local: "127.0.0.1:3000", server: defaultServer},
-		{args: []string{"http", "8080"}, local: "127.0.0.1:8080", server: defaultServer},
-		{args: []string{"3000", "--sub", "My-API"}, local: "127.0.0.1:3000", sub: "my-api", server: defaultServer},
-		{args: []string{"--sub", "demo", "3000"}, local: "127.0.0.1:3000", sub: "demo", server: defaultServer},
-		{args: []string{"http", "3000", "--sub", "demo", "--server", "tunnel.ochq.uz:9000"}, local: "127.0.0.1:3000", sub: "demo", server: "tunnel.ochq.uz:9000"},
-		{args: []string{"192.168.1.20:80"}, local: "192.168.1.20:80", server: defaultServer},
+		{args: []string{"3000"}, local: "127.0.0.1:3000", server: defaultServer, token: defaultToken},
+		{args: []string{"http", "8080"}, local: "127.0.0.1:8080", server: defaultServer, token: defaultToken},
+		{args: []string{"3000", "--sub", "My-API"}, local: "127.0.0.1:3000", sub: "my-api", server: defaultServer, token: defaultToken},
+		{args: []string{"--sub", "demo", "3000"}, local: "127.0.0.1:3000", sub: "demo", server: defaultServer, token: defaultToken},
+		{args: []string{"3000", "--sub", "Demo.ochq.uz"}, local: "127.0.0.1:3000", sub: "demo", server: defaultServer, token: defaultToken},
+		{args: []string{"http", "3000", "--sub", "demo", "--server", "tunnel.example.com:9000"}, local: "127.0.0.1:3000", sub: "demo", server: "tunnel.example.com:9000"},
+		{args: []string{"3000", "--sub", "demo.example.com", "--server", "tunnel.example.com:9000"}, local: "127.0.0.1:3000", sub: "demo", server: "tunnel.example.com:9000"},
+		{args: []string{"192.168.1.20:80"}, local: "192.168.1.20:80", server: defaultServer, token: defaultToken},
 		// ochq 0.1 used Go's flag package: single-dash long flags.
 		{args: []string{"3000", "-sub", "demo", "-server=a.b:1", "-token", "t"}, local: "127.0.0.1:3000", sub: "demo", server: "a.b:1", token: "t"},
 	}
@@ -65,6 +67,35 @@ func TestTunnelInvocations(t *testing.T) {
 				t.Fatalf("got %+v", *cfg)
 			}
 		})
+	}
+}
+
+// The built-in token and fingerprint belong to the hosted server only; they
+// must never be sent to, or used to verify, a server the user picked.
+func TestBuiltInCredentials(t *testing.T) {
+	clearEnv(t)
+	cfg, _, err := execute(t, "3000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token != defaultToken || cfg.Fingerprint != defaultFingerprint {
+		t.Fatalf("hosted server needs no setup, got %+v", *cfg)
+	}
+
+	cfg, _, err = execute(t, "3000", "--server", "tunnel.example.com:9000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token != "" || cfg.Fingerprint != "" {
+		t.Fatalf("built-in credentials leaked to another server: %+v", *cfg)
+	}
+
+	cfg, _, err = execute(t, "3000", "--token", "mine", "--fingerprint", "SHA256:mine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Token != "mine" || cfg.Fingerprint != "SHA256:mine" {
+		t.Fatalf("flags must win over built-in values: %+v", *cfg)
 	}
 }
 
@@ -130,13 +161,14 @@ func TestVersion(t *testing.T) {
 func TestErrors(t *testing.T) {
 	clearEnv(t)
 	tests := map[string][]string{
-		`invalid port "abc"`:           {"abc"},
-		`invalid port "99999"`:         {"99999"},
-		`invalid --sub "a_b"`:          {"3000", "--sub", "a_b"},
-		`unknown command "verison"`:    {"verison"},
-		`did you mean "version"`:       {"verison"},
-		"accepts 1 arg(s), received 0": {"http"},
-		"unknown flag: --sevrer":       {"3000", "--sevrer", "x"},
+		`invalid port "abc"`:            {"abc"},
+		`invalid port "99999"`:          {"99999"},
+		`invalid --sub "a_b"`:           {"3000", "--sub", "a_b"},
+		`invalid --sub "demo.other.uz"`: {"3000", "--sub", "demo.other.uz"},
+		`unknown command "verison"`:     {"verison"},
+		`did you mean "version"`:        {"verison"},
+		"accepts 1 arg(s), received 0":  {"http"},
+		"unknown flag: --sevrer":        {"3000", "--sevrer", "x"},
 	}
 	for want, args := range tests {
 		cfg, _, err := execute(t, args...)

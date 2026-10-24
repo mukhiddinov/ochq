@@ -37,10 +37,9 @@ out to an `ochqd` server, and every request to `https://<name>.ochq.uz` is
 carried back through that connection to your `localhost`.
 
 > [!NOTE]
-> OCHQ is in **preview** (v0.x). The hosted server at `tunnel.ochq.uz` is
-> invite-only for now — you need an access token — and until HTTPS on port 443
-> rolls out, public URLs look like `http://demo.ochq.uz:8080`. You can also
-> [run your own server](docs/self-hosting.md).
+> OCHQ is in **preview** (v0.x). The hosted server at `ochq.uz` is free and
+> needs no account — install `ochq` and run it. Accounts with personal tokens
+> come later. You can also [run your own server](docs/self-hosting.md).
 
 ## Contents
 
@@ -58,7 +57,8 @@ carried back through that connection to your `localhost`.
 
 ## Features
 
-- **One command** — `ochq 3000` and your local app is online.
+- **One command, zero setup** — `ochq 3000` and your local app is online. No
+  account, token or config file.
 - **Custom subdomains** — `--sub my-api` gives you `https://my-api.ochq.uz`.
 - **Live request log** — method, path, status and latency of every request.
 - **Survives network drops** — reconnects with exponential backoff and keeps
@@ -209,40 +209,26 @@ ochq version
 
 ## Quick start
 
-**1. Tell `ochq` where the server is and how to authenticate.** Settings come
-from environment variables (or the flags of the same name), so set them once in
-your shell profile.
-
-Linux / macOS (`~/.bashrc`, `~/.zshrc`):
-
-```bash
-export OCHQ_SERVER=tunnel.ochq.uz:9000
-export OCHQ_TOKEN=<your-token>
-export OCHQ_FINGERPRINT=<server-fingerprint>   # SHA256:..., see "Security"
-```
-
-Windows (PowerShell — `setx` persists them for new terminals):
-
-```powershell
-setx OCHQ_SERVER "tunnel.ochq.uz:9000"
-setx OCHQ_TOKEN "<your-token>"
-setx OCHQ_FINGERPRINT "<server-fingerprint>"
-```
-
-**2. Start something locally**, for example:
+**1. Start something locally**, for example:
 
 ```bash
 python3 -m http.server 3000
 ```
 
-**3. Open the tunnel:**
+**2. Open the tunnel:**
 
 ```bash
 ochq 3000
 ```
 
-`ochq` prints your public URL. Open it from any device — your phone on mobile
-data is a good test.
+That's all — `ochq` prints your public URL, such as `https://k3x9.ochq.uz`.
+Open it from any device; your phone on mobile data is a good test.
+
+**3. Want a fixed name?** Ask for a subdomain:
+
+```bash
+ochq 3000 --sub my-app        # https://my-app.ochq.uz
+```
 
 ## Usage
 
@@ -254,20 +240,40 @@ ochq [http] <port | host:port> [flags]
 |---|---|
 | `ochq 3000` | Expose `localhost:3000` on a random subdomain |
 | `ochq http 8080` | Same, with the protocol spelled out |
-| `ochq 3000 --sub my-api` | Ask for `my-api.ochq.uz` (3–63 letters, digits or hyphens) |
+| `ochq 3000 --sub my-api` | Ask for `my-api.ochq.uz` (3–63 letters, digits or hyphens; `--sub my-api.ochq.uz` works too) |
 | `ochq 192.168.1.20:80` | Expose another machine on your network |
-| `ochq 3000 --server my.server.com:9000` | Use a different `ochqd` server |
 
-Flags may come before or after the port. Each flag has an environment variable;
-the flag wins if both are set.
+Flags may come before or after the port.
+
+| Flag | Description |
+|---|---|
+| `--sub` | Requested subdomain; random if omitted |
+| — | Set `NO_COLOR` to disable colored output ([no-color.org](https://no-color.org)) |
+
+If a subdomain is already in use, `ochq` says so and exits — pick another name
+or leave `--sub` out for a random one.
+
+<details>
+<summary><b>Using your own ochqd server</b></summary>
+
+`ochq` talks to the hosted server at `tunnel.ochq.uz` out of the box. For a
+[self-hosted](docs/self-hosting.md) server, pass its address and, if it needs
+them, its token and fingerprint. Each flag has an environment variable; the
+flag wins if both are set.
 
 | Flag | Environment | Description |
 |---|---|---|
-| `--server` | `OCHQ_SERVER` | `ochqd` tunnel address, `host:port` (default `localhost:9000`) |
+| `--server` | `OCHQ_SERVER` | `ochqd` tunnel address, `host:port` (default `tunnel.ochq.uz:9000`) |
 | `--token` | `OCHQ_TOKEN` | Access token, if the server requires one |
-| `--fingerprint` | `OCHQ_FINGERPRINT` | Pin the server's TLS key (`SHA256:...`) |
-| `--sub` | — | Requested subdomain; random if omitted |
-| — | `NO_COLOR` | Disable colored output ([no-color.org](https://no-color.org)) |
+| `--fingerprint` | `OCHQ_FINGERPRINT` | Pin the server's self-signed TLS key (`SHA256:...`) |
+
+```bash
+ochq 3000 --server tunnel.example.com:9000 --token "$TOKEN" --fingerprint SHA256:...
+```
+
+The hosted server's own token and fingerprint are built into `ochq` and are
+never sent to any other server.
+</details>
 
 Other commands:
 
@@ -304,7 +310,7 @@ same URL. If nothing is listening on your local port, `ochq` warns at startup
 and visitors get a `502` explaining that the local service is unreachable.
 
 **Exit codes.** `0` after Ctrl+C, `1` on an error that retrying cannot fix
-(wrong token, fingerprint mismatch, invalid or taken subdomain). Such errors
+(invalid or taken subdomain, fingerprint mismatch, wrong token). Such errors
 come with a `hint:` line.
 
 ## Updating and uninstalling
@@ -350,11 +356,11 @@ Details of the wire protocol are in [`internal/proto`](internal/proto).
 ## Security
 
 - **Tunnel encryption.** Client ↔ server traffic, including the token, is TLS 1.3.
-- **Server identity.** While the server uses a self-signed certificate, the
-  client pins its public key with `OCHQ_FINGERPRINT` — like SSH host keys. A
-  client without a pin refuses the connection and prints the fingerprint it
-  saw, so you can compare it with the one the server administrator gives you.
-  A mismatch is refused before the token is sent.
+- **Server identity.** The client pins the server's public key, like SSH host
+  keys: the hosted server's key is built into `ochq`, so an impostor on the
+  network is refused before anything is sent. For a self-hosted server with a
+  self-signed certificate, pass its key with `--fingerprint`; without a pin
+  `ochq` refuses the connection and prints the fingerprint it saw.
 - **What you expose is public.** Anyone with the URL can reach your local
   service. Don't tunnel admin panels, databases or a directory with secrets —
   `python3 -m http.server` in a project folder publishes its `.git` too.
@@ -384,7 +390,7 @@ Run everything locally — `*.localhost` always resolves to `127.0.0.1`:
 ```bash
 go run ./cmd/ochqd                                      # terminal 1, prints its fingerprint
 python3 -m http.server 3000                             # terminal 2
-go run ./cmd/ochq 3000 --sub demo --fingerprint SHA256:...   # terminal 3
+go run ./cmd/ochq 3000 --sub demo --server localhost:9000 --fingerprint SHA256:...   # terminal 3
 curl http://demo.localhost:8080/                        # terminal 4
 ```
 
@@ -412,8 +418,9 @@ updates Homebrew and Scoop, and rebuilds the signed apt/dnf repository.
 - [x] TLS tunnel with multiplexed streams
 - [x] Live request log, automatic reconnect
 - [x] Signed packages for apt, dnf, Homebrew and Scoop
-- [ ] `https://<name>.ochq.uz` on port 443 for everyone
-- [ ] Accounts and personal tokens (`ochq config add-token`)
+- [x] Free hosted server, no setup
+- [ ] Accounts: `ochq login` opens the browser, personal tokens, request history
+- [ ] Reserved subdomains per account
 - [ ] Local web inspector at `localhost:4040`: view and replay requests
 - [ ] TCP tunnels
 
