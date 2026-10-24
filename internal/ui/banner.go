@@ -116,11 +116,19 @@ var typing = []frame{
 	{"ochq", 0},
 }
 
+// blink is how the caret blinks after the name is typed: it goes off and on
+// twice before the banner gives way to the tunnel output. The blink is drawn
+// by hand because terminals blink at their own pace, or not at all.
+var blink = struct{ on, off time.Duration }{on: 450 * time.Millisecond, off: 350 * time.Millisecond}
+
+const blinkTimes = 2
+
 // Terminal control sequences.
 const (
 	hideCursor        = "\033[?25l"
 	showCursor        = "\033[?25h"
 	blinkingUnder     = "\033[3 q" // DECSCUSR: blinking underline
+	steadyUnder       = "\033[4 q" // DECSCUSR: steady underline
 	defaultCursor     = "\033[0 q"
 	clearLine         = "\r\033[2K"
 	reserveRows       = "\n\n\n\n\n\n"
@@ -187,23 +195,48 @@ func (p *Printer) typeBanner(ctx context.Context, version string) {
 		for _, l := range lines {
 			fmt.Fprint(w, clearLine+strings.TrimRight(l, " ")+"\n")
 		}
-		if last {
-			break
-		}
 		// Park the visible cursor right after the last letter, on the
 		// baseline, so it reads like a text caret while "typing".
 		col := len(strings.TrimRight(render(f.word)[caretRow], " ")) + 1
 		fmt.Fprintf(w, cursorUpFmt+cursorColumnFmt+showCursor, bannerRows-caretRow, col)
 		atRow = caretRow
-		select {
-		case <-ctx.Done():
-			fmt.Fprintf(w, hideCursor+cursorDownFmt+"\r"+showCursor+"\n", bannerRows-caretRow)
-			return
-		case <-time.After(f.delay):
+		if last {
+			p.blinkCaret(ctx)
+			break
+		}
+		if !sleep(ctx, f.delay) {
+			break
 		}
 		fmt.Fprint(w, hideCursor)
 	}
-	fmt.Fprint(w, "\n"+showCursor)
+	// Leave the caret's row for the line below the banner, plus a blank one.
+	fmt.Fprintf(w, hideCursor+cursorDownFmt+"\r"+showCursor+"\n", bannerRows-caretRow)
+}
+
+// blinkCaret blinks the parked cursor blinkTimes times, ending visible.
+func (p *Printer) blinkCaret(ctx context.Context) {
+	fmt.Fprint(p.w, steadyUnder)
+	for range blinkTimes {
+		if !sleep(ctx, blink.on) {
+			return
+		}
+		fmt.Fprint(p.w, hideCursor)
+		if !sleep(ctx, blink.off) {
+			return
+		}
+		fmt.Fprint(p.w, showCursor)
+	}
+	sleep(ctx, blink.on)
+}
+
+// sleep waits for d and reports false if ctx was cancelled first.
+func sleep(ctx context.Context, d time.Duration) bool {
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(d):
+		return true
+	}
 }
 
 // Close restores the terminal cursor if AnimateBanner changed it. It waits

@@ -68,7 +68,9 @@ func fastTyping(t *testing.T) {
 	for i := range typing {
 		typing[i].delay = 0
 	}
-	t.Cleanup(func() { typing = saved })
+	savedBlink := blink
+	blink.on, blink.off = 0, 0
+	t.Cleanup(func() { typing, blink = saved, savedBlink })
 }
 
 func TestAnimationOnTerminal(t *testing.T) {
@@ -91,6 +93,12 @@ func TestAnimationOnTerminal(t *testing.T) {
 	}
 	if !strings.HasSuffix(out, defaultCursor+showCursor) {
 		t.Errorf("Close did not restore the cursor: %q", out[len(out)-20:])
+	}
+	// The caret blinks off and on twice after the name, before any output.
+	tail := out[final:warn]
+	blinks := strings.Count(tail, hideCursor+showCursor)
+	if blinks != blinkTimes || !strings.Contains(tail, steadyUnder) {
+		t.Errorf("no final caret blink: %q", tail)
 	}
 	if n := strings.Count(out, tagline); n != 1 {
 		t.Errorf("tagline drawn %d times; it belongs to the final frame only", n)
