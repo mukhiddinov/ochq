@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"github.com/mukhiddinov/ochq/internal/proto"
 )
@@ -34,6 +36,45 @@ func TestRegistryReserve(t *testing.T) {
 	r.Remove("demo", tun)
 	if !r.Reserve("demo") {
 		t.Fatal("subdomain should be free after Remove")
+	}
+}
+
+// A request that races the end of a handshake must reach the tunnel instead
+// of getting 404: Await waits for the reservation to become active.
+func TestRegistryAwait(t *testing.T) {
+	ctx := context.Background()
+	r := NewRegistry()
+
+	start := time.Now()
+	if _, ok := r.Await(ctx, "nope", time.Second); ok || time.Since(start) > 100*time.Millisecond {
+		t.Fatal("an unknown subdomain must fail at once, without waiting")
+	}
+
+	r.Reserve("demo")
+	tun := &tunnel{subdomain: "demo"}
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		r.Activate("demo", tun)
+	}()
+	if got, ok := r.Await(ctx, "demo", 5*time.Second); !ok || got != tun {
+		t.Fatal("Await should return the tunnel once it is activated")
+	}
+
+	// A handshake that fails releases the reservation and wakes waiters.
+	r.Reserve("gone")
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		r.Remove("gone", nil)
+	}()
+	start = time.Now()
+	if _, ok := r.Await(ctx, "gone", 5*time.Second); ok || time.Since(start) > 2*time.Second {
+		t.Fatal("a released reservation must end the wait without a tunnel")
+	}
+
+	// A reservation that never finishes gives up after max.
+	r.Reserve("stuck")
+	if _, ok := r.Await(ctx, "stuck", 30*time.Millisecond); ok {
+		t.Fatal("Await must time out on a reservation that never activates")
 	}
 }
 
