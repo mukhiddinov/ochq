@@ -15,12 +15,12 @@ Expose a local port to the internet under a public URL — one command, no route
 
 ```text
 $ ochq 3000 --sub demo
-              _
-  ___   ___  | |__    __ _
- / _ \ / __| | '_ \  / _` |
-| (_) | (__  | | | || (_| |
- \___/ \___| |_| |_| \__, |   0.1.0
-                        |_|   Open Channels, Handle Queries
+            _
+  ___   ___| |__   __ _
+ / _ \ / __| '_ \ / _` |
+| (_) | (__| | | | (_| |
+ \___/ \___|_| |_|\__, |   0.3.4
+                     |_|   Open Channels, Handle Queries
 
 [✓] Status:       Online
 [✓] Forwarding:   http://localhost:3000
@@ -68,16 +68,35 @@ carried back through that connection to your `localhost`.
 - **Encrypted tunnel** — TLS 1.3 between client and server, with certificate
   pinning.
 - **Single static binary** — Linux, macOS and Windows, on amd64 and arm64.
-- **Signed packages** — install and update with `apt`, `dnf`, Homebrew or Scoop.
+- **Native packages** — install and update with `apt`, `dnf` (Fedora COPR or
+  the signed OCHQ repository), Homebrew or Scoop.
 
 ## Installation
 
 ### Linux
 
-**One-line installer** (Debian, Ubuntu, Fedora, RHEL and derivatives). It adds
-the signed OCHQ package repository, so regular system updates keep `ochq` up
-to date. On other distributions it installs the checksum-verified binary to
-`/usr/local/bin`.
+| Distribution | Install |
+|---|---|
+| **Fedora** 43+ | `sudo dnf copr enable mukhiddinov/ochq && sudo dnf install ochq` |
+| **Debian / Ubuntu** and derivatives | `curl -fsSL https://mukhiddinov.github.io/ochq/install.sh \| sh` |
+| **RHEL / Rocky / Alma** | `curl -fsSL https://mukhiddinov.github.io/ochq/install.sh \| sh` |
+| Anything else | the same installer, or a [release archive](https://github.com/mukhiddinov/ochq/releases/latest) (see below) |
+
+**Fedora** — the package is built from source on Fedora's own
+[COPR](https://copr.fedorainfracloud.org/coprs/mukhiddinov/ochq/) builders
+for x86_64 and aarch64. `dnf copr enable` adds the repository once (dnf asks
+you to confirm, as for every COPR); after that `dnf upgrade` keeps `ochq`
+current.
+
+```bash
+sudo dnf copr enable mukhiddinov/ochq
+sudo dnf install ochq
+```
+
+**One-line installer** — on Debian, Ubuntu, RHEL and their derivatives it adds
+the signed OCHQ package repository and installs `ochq` with `apt` or `dnf`, so
+regular system updates keep it up to date. On other distributions it installs
+the checksum-verified binary to `/usr/local/bin`.
 
 ```bash
 curl -fsSL https://mukhiddinov.github.io/ochq/install.sh | sh
@@ -103,15 +122,11 @@ sudo apt install ochq
 Requires apt 2.4 or newer (Debian 12+, Ubuntu 22.04+).
 </details>
 
-**Fedora** — from [COPR](https://copr.fedorainfracloud.org/coprs/mukhiddinov/ochq/), built from source on Fedora's servers:
-
-```bash
-sudo dnf copr enable mukhiddinov/ochq
-sudo dnf install ochq
-```
-
 <details>
-<summary><b>Fedora / RHEL / Rocky / Alma (dnf), step by step</b></summary>
+<summary><b>RHEL / Rocky / Alma (dnf), step by step</b></summary>
+
+The OCHQ repository works on Fedora too, if you prefer it to COPR — use one
+or the other, not both.
 
 ```bash
 # 1. Add the repository (the signing key is fetched on first use)
@@ -130,7 +145,7 @@ Download the archive for your architecture from the
 it against `checksums.txt`, and put the binary on your `PATH`:
 
 ```bash
-VERSION=0.1.0 ARCH=amd64   # or arm64
+VERSION=0.3.4 ARCH=amd64   # or arm64
 curl -fsSLO https://github.com/mukhiddinov/ochq/releases/download/v$VERSION/ochq_${VERSION}_linux_$ARCH.tar.gz
 curl -fsSLO https://github.com/mukhiddinov/ochq/releases/download/v$VERSION/checksums.txt
 sha256sum --check --ignore-missing checksums.txt
@@ -139,8 +154,9 @@ sudo install -m 0755 ochq /usr/local/bin/ochq
 ```
 </details>
 
-The packages and repository metadata are signed with this key — compare it
-with what `apt`/`dnf` show you:
+The OCHQ repository's packages and metadata are signed with this key (COPR
+packages are signed by COPR's own key) — compare it with what `apt`/`dnf`
+show you:
 
 ```text
 OCHQ Package Signing
@@ -192,7 +208,7 @@ scoop install ochq
    [releases page](https://github.com/mukhiddinov/ochq/releases/latest).
 2. Check it against `checksums.txt`:
    ```powershell
-   Get-FileHash .\ochq_0.1.0_windows_amd64.zip -Algorithm SHA256
+   Get-FileHash .\ochq_0.3.4_windows_amd64.zip -Algorithm SHA256
    ```
 3. Extract `ochq.exe` into a folder on your `PATH`, e.g. `%USERPROFILE%\bin`.
 
@@ -325,14 +341,16 @@ come with a `hint:` line.
 | Platform | Update | Uninstall |
 |---|---|---|
 | Debian / Ubuntu | `sudo apt update && sudo apt upgrade` | `sudo apt remove ochq` |
-| Fedora / RHEL | `sudo dnf upgrade --refresh ochq` | `sudo dnf remove ochq` |
+| Fedora (COPR) | `sudo dnf upgrade --refresh ochq` | `sudo dnf remove ochq` |
+| RHEL / Rocky / Alma | `sudo dnf upgrade --refresh ochq` | `sudo dnf remove ochq` |
 | macOS (Homebrew) | `brew upgrade --cask ochq` | `brew uninstall --cask ochq` |
 | Windows (Scoop) | `scoop update ochq` | `scoop uninstall ochq` |
 | Manual install | re-run the installer | `sudo rm /usr/local/bin/ochq` |
 
 To remove the package repository as well:
-`sudo rm /etc/apt/sources.list.d/ochq.list /etc/apt/keyrings/ochq.asc` or
-`sudo rm /etc/yum.repos.d/ochq.repo`.
+`sudo dnf copr remove mukhiddinov/ochq` (COPR),
+`sudo rm /etc/apt/sources.list.d/ochq.list /etc/apt/keyrings/ochq.asc` (apt) or
+`sudo rm /etc/yum.repos.d/ochq.repo` (OCHQ dnf repository).
 
 ## How it works
 
@@ -424,7 +442,8 @@ updates Homebrew and Scoop, and rebuilds the signed apt/dnf repository.
 
 - [x] TLS tunnel with multiplexed streams
 - [x] Live request log, automatic reconnect
-- [x] Signed packages for apt, dnf, Homebrew and Scoop
+- [x] Signed packages for apt, dnf, Homebrew and Scoop; Fedora COPR
+- [ ] Snap Store (name registration under review)
 - [x] Free hosted server, no setup
 - [ ] Accounts: `ochq login` opens the browser, personal tokens, request history
 - [ ] Reserved subdomains per account
