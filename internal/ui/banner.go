@@ -20,7 +20,10 @@ const (
 	bannerRows = 6
 	// The caret sits on the letters' baseline row, like a text cursor.
 	caretRow = 4
-	tagline  = "Open Channels, Handle Queries"
+	// caret is drawn as part of the banner: a terminal's own cursor is one
+	// character cell, far smaller than these letters.
+	caret   = "_____"
+	tagline = "Open Channels, Handle Queries"
 )
 
 // rowColors fade from cyan to violet down the banner (xterm 256 colors).
@@ -104,7 +107,8 @@ type frame struct {
 }
 
 // typing spells "ochiq" (Uzbek for "open"), takes back two letters and
-// settles on the name: o, oc, och, ochi, ochiq, ochi, och, ochq.
+// settles on the name: o, oc, och, ochi, ochiq, ochi, och, ochq. The caret
+// follows the last letter all along.
 var typing = []frame{
 	{"o", 85 * time.Millisecond},
 	{"oc", 85 * time.Millisecond},
@@ -113,12 +117,11 @@ var typing = []frame{
 	{"ochiq", 380 * time.Millisecond},
 	{"ochi", 110 * time.Millisecond},
 	{"och", 200 * time.Millisecond},
-	{"ochq", 0},
+	{"ochq", 450 * time.Millisecond},
 }
 
 // blink is how the caret blinks after the name is typed: it goes off and on
-// twice before the banner gives way to the tunnel output. The blink is drawn
-// by hand because terminals blink at their own pace, or not at all.
+// twice, then the version and tagline take its place.
 var blink = struct{ on, off time.Duration }{on: 450 * time.Millisecond, off: 350 * time.Millisecond}
 
 const blinkTimes = 2
@@ -127,19 +130,17 @@ const blinkTimes = 2
 const (
 	hideCursor        = "\033[?25l"
 	showCursor        = "\033[?25h"
-	blinkingUnder     = "\033[3 q" // DECSCUSR: blinking underline
-	steadyUnder       = "\033[4 q" // DECSCUSR: steady underline
-	defaultCursor     = "\033[0 q"
 	clearLine         = "\r\033[2K"
 	reserveRows       = "\n\n\n\n\n\n"
 	cursorUpFmt       = "\033[%dA"
-	cursorDownFmt     = "\033[%dB"
-	cursorColumnFmt   = "\033[%dG"
 	ansi256Foreground = "\033[38;5;%dm"
 )
 
-func (p *Printer) bannerLines(word, version string) [bannerRows]string {
+func (p *Printer) bannerLines(word, version string, withCaret bool) [bannerRows]string {
 	rows := render(word)
+	if withCaret {
+		rows[caretRow] = strings.TrimRight(rows[caretRow], " ") + " " + caret
+	}
 	width := len(render("ochq")[0])
 	var out [bannerRows]string
 	for r, line := range rows {
@@ -159,7 +160,7 @@ func (p *Printer) bannerLines(word, version string) [bannerRows]string {
 
 // Banner prints the logo at once: for pipes, files and dumb terminals.
 func (p *Printer) Banner(version string) {
-	lines := p.bannerLines("ochq", version)
+	lines := p.bannerLines("ochq", version, false)
 	p.printf("%s\n\n", strings.Join(lines[:], "\n"))
 }
 
@@ -173,7 +174,7 @@ func (p *Printer) AnimateBanner(ctx context.Context, version string) {
 		return
 	}
 	p.mu.Lock()
-	p.styledCursor = true
+	p.hidCursor = true
 	go func() {
 		defer p.mu.Unlock()
 		p.typeBanner(ctx, version)
@@ -183,50 +184,33 @@ func (p *Printer) AnimateBanner(ctx context.Context, version string) {
 // typeBanner must run with p.mu held.
 func (p *Printer) typeBanner(ctx context.Context, version string) {
 	w := p.w
-	fmt.Fprint(w, blinkingUnder+hideCursor+reserveRows)
-	atRow := bannerRows // the cursor is on the line below the banner
-	for i, f := range typing {
-		last := i == len(typing)-1
-		fmt.Fprintf(w, cursorUpFmt, atRow)
-		lines := p.bannerLines(f.word, "")
-		if last {
-			lines = p.bannerLines(f.word, version)
-		}
-		for _, l := range lines {
+	fmt.Fprint(w, hideCursor+reserveRows)
+	defer fmt.Fprint(w, "\n")
+	// draw repaints the banner in the rows reserved above the cursor.
+	draw := func(word, version string, withCaret bool) {
+		fmt.Fprintf(w, cursorUpFmt, bannerRows)
+		for _, l := range p.bannerLines(word, version, withCaret) {
 			fmt.Fprint(w, clearLine+strings.TrimRight(l, " ")+"\n")
 		}
-		// Park the visible cursor right after the last letter, on the
-		// baseline, so it reads like a text caret while "typing".
-		col := len(strings.TrimRight(render(f.word)[caretRow], " ")) + 1
-		fmt.Fprintf(w, cursorUpFmt+cursorColumnFmt+showCursor, bannerRows-caretRow, col)
-		atRow = caretRow
-		if last {
-			p.blinkCaret(ctx)
-			break
-		}
-		if !sleep(ctx, f.delay) {
-			break
-		}
-		fmt.Fprint(w, hideCursor)
 	}
-	// Leave the caret's row for the line below the banner, plus a blank one.
-	fmt.Fprintf(w, hideCursor+cursorDownFmt+"\r"+showCursor+"\n", bannerRows-caretRow)
-}
-
-// blinkCaret blinks the parked cursor blinkTimes times, ending visible.
-func (p *Printer) blinkCaret(ctx context.Context) {
-	fmt.Fprint(p.w, steadyUnder)
-	for range blinkTimes {
-		if !sleep(ctx, blink.on) {
+	for _, f := range typing {
+		draw(f.word, "", true)
+		if !sleep(ctx, f.delay) {
 			return
 		}
-		fmt.Fprint(p.w, hideCursor)
+	}
+	name := typing[len(typing)-1].word
+	for range blinkTimes {
+		draw(name, "", false)
 		if !sleep(ctx, blink.off) {
 			return
 		}
-		fmt.Fprint(p.w, showCursor)
+		draw(name, "", true)
+		if !sleep(ctx, blink.on) {
+			return
+		}
 	}
-	sleep(ctx, blink.on)
+	draw(name, version, false)
 }
 
 // sleep waits for d and reports false if ctx was cancelled first.
@@ -239,13 +223,13 @@ func sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// Close restores the terminal cursor if AnimateBanner changed it. It waits
+// Close shows the terminal cursor again if AnimateBanner hid it. It waits
 // for a running animation to finish.
 func (p *Printer) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.styledCursor {
-		fmt.Fprint(p.w, defaultCursor+showCursor)
-		p.styledCursor = false
+	if p.hidCursor {
+		fmt.Fprint(p.w, showCursor)
+		p.hidCursor = false
 	}
 }
