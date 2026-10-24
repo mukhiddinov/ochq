@@ -27,13 +27,13 @@ const (
 
 // Printer is safe for concurrent use: requests finish on many goroutines.
 type Printer struct {
-	mu           sync.Mutex
-	w            io.Writer
-	tty          bool // cursor movement works: animate, restore on Close
-	color        bool
-	now          func() time.Time
-	shownLogs    bool // the "Logs" heading is printed once, not after every reconnect
-	styledCursor bool // AnimateBanner changed the cursor shape
+	mu        sync.Mutex
+	w         io.Writer
+	tty       bool // cursor movement works: animate, restore on Close
+	color     bool
+	now       func() time.Time
+	shownLogs bool // the "Logs" heading is printed once, not after every reconnect
+	hidCursor bool // AnimateBanner hid the terminal cursor
 }
 
 // New writes to w. On a terminal it animates the banner and, unless

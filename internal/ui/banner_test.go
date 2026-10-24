@@ -82,8 +82,8 @@ func TestAnimationOnTerminal(t *testing.T) {
 	p.Close()
 
 	out := buf.String()
-	if !strings.HasPrefix(out, blinkingUnder) {
-		t.Errorf("cursor not switched to a blinking underline: %q", out[:20])
+	if !strings.HasPrefix(out, hideCursor) {
+		t.Errorf("terminal cursor not hidden: %q", out[:20])
 	}
 	ochiq := strings.Index(out, "|/ _` |")   // "i" joined to "q": only in the ochiq frame
 	final := strings.LastIndex(out, "1.2.3") // version appears with the last frame only
@@ -91,14 +91,17 @@ func TestAnimationOnTerminal(t *testing.T) {
 	if ochiq < 0 || final < 0 || warn < 0 || !(ochiq < final && final < warn) {
 		t.Fatalf("order ochiq=%d final=%d warn=%d", ochiq, final, warn)
 	}
-	if !strings.HasSuffix(out, defaultCursor+showCursor) {
+	if !strings.HasSuffix(out, showCursor) {
 		t.Errorf("Close did not restore the cursor: %q", out[len(out)-20:])
 	}
-	// The caret blinks off and on twice after the name, before any output.
-	tail := out[final:warn]
-	blinks := strings.Count(tail, hideCursor+showCursor)
-	if blinks != blinkTimes || !strings.Contains(tail, steadyUnder) {
-		t.Errorf("no final caret blink: %q", tail)
+	// The caret follows every typed frame, then is drawn blinkTimes more
+	// times while blinking; the final frame with the version has none.
+	if n := strings.Count(out, caret); n != len(typing)+blinkTimes {
+		t.Errorf("caret drawn %d times, want %d", n, len(typing)+blinkTimes)
+	}
+	finalFrame := out[strings.LastIndex(out, "\033[6A"):warn]
+	if strings.Contains(finalFrame, caret) || !strings.Contains(finalFrame, "1.2.3") {
+		t.Errorf("final frame should show the version instead of the caret: %q", finalFrame)
 	}
 	if n := strings.Count(out, tagline); n != 1 {
 		t.Errorf("tagline drawn %d times; it belongs to the final frame only", n)
@@ -115,7 +118,7 @@ func TestAnimationStopsOnCancel(t *testing.T) {
 	if strings.Contains(buf.String(), "ochq") && strings.Contains(buf.String(), "1.2.3") {
 		t.Error("a cancelled animation should not reach the final frame")
 	}
-	if !strings.HasSuffix(buf.String(), defaultCursor+showCursor) {
+	if !strings.HasSuffix(buf.String(), showCursor) {
 		t.Error("cursor not restored after cancel")
 	}
 }
