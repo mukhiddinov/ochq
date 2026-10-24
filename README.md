@@ -312,7 +312,7 @@ come with a `hint:` line.
 | Platform | Update | Uninstall |
 |---|---|---|
 | Debian / Ubuntu | `sudo apt update && sudo apt upgrade` | `sudo apt remove ochq` |
-| Fedora / RHEL | `sudo dnf upgrade ochq` | `sudo dnf remove ochq` |
+| Fedora / RHEL | `sudo dnf upgrade --refresh ochq` | `sudo dnf remove ochq` |
 | macOS (Homebrew) | `brew upgrade --cask ochq` | `brew uninstall --cask ochq` |
 | Windows (Scoop) | `scoop update ochq` | `scoop uninstall ochq` |
 | Manual install | re-run the installer | `sudo rm /usr/local/bin/ochq` |

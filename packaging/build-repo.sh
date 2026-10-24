@@ -61,6 +61,8 @@ createrepo_c --quiet "$OUT/rpm"
 # repomd.xml lists checksums of all metadata, which lists checksums of all
 # packages: signing it covers the whole repository, like InRelease for apt.
 gpg --batch --yes --local-user "$KEY" --armor --detach-sign -o "$OUT/rpm/repodata/repomd.xml.asc" "$OUT/rpm/repodata/repomd.xml"
+# metadata_expire: dnf's default is 48h, so a release could take two days
+# to show up in `dnf upgrade`. Fedora's own repositories use 6h.
 cat > "$OUT/rpm/ochq.repo" <<EOF
 [ochq]
 name=OCHQ
@@ -69,6 +71,7 @@ enabled=1
 gpgcheck=0
 repo_gpgcheck=1
 gpgkey=$BASE_URL/gpg.key
+metadata_expire=6h
 EOF
 
 # ---- installer ---------------------------------------------------------
