@@ -60,6 +60,10 @@ func (t *tunnel) close() {
 	t.session.Close()
 }
 
+// activationWait bounds how long a request waits for a tunnel whose
+// handshake is finishing; the gap is normally microseconds.
+const activationWait = 2 * time.Second
+
 // ServeHTTP routes a public request to the tunnel named by its Host header.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	sub, ok := s.subdomainFromHost(r.Host)
@@ -67,7 +71,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "ochq: unknown host", http.StatusNotFound)
 		return
 	}
-	t, ok := s.registry.Lookup(sub)
+	t, ok := s.registry.Await(r.Context(), sub, activationWait)
 	if !ok {
 		http.Error(w, "ochq: tunnel "+sub+" not found", http.StatusNotFound)
 		return

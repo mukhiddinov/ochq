@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
 	"sync"
+	"time"
 )
 
 // randomAttempts bounds how often ReserveRandom retries on a collision.
@@ -16,14 +18,18 @@ var errNoSubdomain = errors.New("could not allocate a free subdomain")
 //
 // A subdomain goes through two states: Reserve marks it as taken while the
 // handshake is still running (the map holds nil), and Activate attaches the
-// tunnel once the yamux session is up. Lookup only returns active tunnels.
+// tunnel once the yamux session is up. Lookup only returns active tunnels;
+// Await also waits out a handshake that is just finishing.
 type Registry struct {
 	mu      sync.RWMutex
 	tunnels map[string]*tunnel
+	// pending holds a channel per reservation, closed when it is activated
+	// or released.
+	pending map[string]chan struct{}
 }
 
 func NewRegistry() *Registry {
-	return &Registry{tunnels: make(map[string]*tunnel)}
+	return &Registry{tunnels: make(map[string]*tunnel), pending: make(map[string]chan struct{})}
 }
 
 // Reserve claims sub. It returns false if sub is already reserved or active.
@@ -34,6 +40,7 @@ func (r *Registry) Reserve(sub string) bool {
 		return false
 	}
 	r.tunnels[sub] = nil
+	r.pending[sub] = make(chan struct{})
 	return true
 }
 
@@ -53,6 +60,7 @@ func (r *Registry) Activate(sub string, t *tunnel) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.tunnels[sub] = t
+	r.settle(sub)
 }
 
 // Remove deletes sub only if it still points to t. Passing nil releases a
@@ -63,6 +71,15 @@ func (r *Registry) Remove(sub string, t *tunnel) {
 	defer r.mu.Unlock()
 	if cur, ok := r.tunnels[sub]; ok && cur == t {
 		delete(r.tunnels, sub)
+		r.settle(sub)
+	}
+}
+
+// settle wakes everyone waiting in Await for sub. r.mu must be held.
+func (r *Registry) settle(sub string) {
+	if ch, ok := r.pending[sub]; ok {
+		close(ch)
+		delete(r.pending, sub)
 	}
 }
 
@@ -72,6 +89,27 @@ func (r *Registry) Lookup(sub string) (*tunnel, bool) {
 	defer r.mu.RUnlock()
 	t := r.tunnels[sub]
 	return t, t != nil
+}
+
+// Await is Lookup for a request that may arrive while sub's handshake is
+// finishing: the server answers the client before it attaches the yamux
+// session, so a request sent the moment the client reports ready can find
+// the subdomain still reserved. Await waits up to max for that.
+func (r *Registry) Await(ctx context.Context, sub string, max time.Duration) (*tunnel, bool) {
+	r.mu.RLock()
+	t, ch := r.tunnels[sub], r.pending[sub]
+	r.mu.RUnlock()
+	if t != nil || ch == nil {
+		return t, t != nil
+	}
+	timer := time.NewTimer(max)
+	defer timer.Stop()
+	select {
+	case <-ch:
+	case <-timer.C:
+	case <-ctx.Done():
+	}
+	return r.Lookup(sub)
 }
 
 // CloseAll closes every active tunnel. Their handlers remove them from the
