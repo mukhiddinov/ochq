@@ -95,3 +95,44 @@ jobs:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v5
+
+  # Fedora COPR (sudo dnf copr enable mukhiddinov/ochq): COPR builds the
+  # package from source on Fedora's builders. Needs the COPR_CONFIG secret,
+  # the ~/.config/copr file from https://copr.fedorainfracloud.org/api/
+  # (the token expires after 180 days).
+  copr:
+    needs: goreleaser
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    container: fedora:44
+    timeout-minutes: 60
+    env:
+      COPR_CONFIG: ${{ secrets.COPR_CONFIG }}
+      CHROOTS: fedora-43 fedora-44 fedora-45 fedora-rawhide
+    steps:
+      # git first, so that checkout makes a real clone for git archive.
+      - name: Install tools
+        run: dnf install -y -q git golang rpm-build copr-cli
+
+      - uses: actions/checkout@v5
+
+      - name: Build the source RPM
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          packaging/copr/srpm.sh "${GITHUB_REF_NAME#v}" srpm
+
+      - name: Build in COPR
+        if: ${{ env.COPR_CONFIG != '' }}
+        run: |
+          mkdir -p ~/.config
+          printf '%s\n' "$COPR_CONFIG" > ~/.config/copr
+          chroots=()
+          for c in $CHROOTS; do chroots+=(--chroot "$c-x86_64" --chroot "$c-aarch64"); done
+          # The project is created on the first release; afterwards this fails
+          # harmlessly because it exists.
+          copr-cli create ochq "${chroots[@]}" \
+            --description "Expose a local port to the internet through an OCHQ tunnel. https://github.com/mukhiddinov/ochq" \
+            --instructions "sudo dnf copr enable mukhiddinov/ochq && sudo dnf install ochq" \
+            || true
+          # Waits for the build and fails the job if any chroot fails.
+          copr-cli build ochq srpm/*.src.rpm
