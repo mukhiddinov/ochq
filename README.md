@@ -68,7 +68,7 @@ carried back through that connection to your `localhost`.
 - **Encrypted tunnel** — TLS 1.3 between client and server, with certificate
   pinning.
 - **Single static binary** — Linux, macOS and Windows, on amd64 and arm64.
-- **Signed packages** — install and update with `apt`, `dnf`, Snap, Homebrew or Scoop.
+- **Signed packages** — install and update with `apt`, `dnf`, Homebrew or Scoop.
 
 ## Installation
 
@@ -81,12 +81,6 @@ to date. On other distributions it installs the checksum-verified binary to
 
 ```bash
 curl -fsSL https://mukhiddinov.github.io/ochq/install.sh | sh
-```
-
-**Snap** (Ubuntu and any distribution with snapd):
-
-```bash
-sudo snap install ochq
 ```
 
 <details>
@@ -325,7 +319,6 @@ come with a `hint:` line.
 |---|---|---|
 | Debian / Ubuntu | `sudo apt update && sudo apt upgrade` | `sudo apt remove ochq` |
 | Fedora / RHEL | `sudo dnf upgrade --refresh ochq` | `sudo dnf remove ochq` |
-| Snap | automatic (`sudo snap refresh ochq` to force) | `sudo snap remove ochq` |
 | macOS (Homebrew) | `brew upgrade --cask ochq` | `brew uninstall --cask ochq` |
 | Windows (Scoop) | `scoop update ochq` | `scoop uninstall ochq` |
 | Manual install | re-run the installer | `sudo rm /usr/local/bin/ochq` |
@@ -424,7 +417,7 @@ updates Homebrew and Scoop, and rebuilds the signed apt/dnf repository.
 
 - [x] TLS tunnel with multiplexed streams
 - [x] Live request log, automatic reconnect
-- [x] Signed packages for apt, dnf, Homebrew and Scoop; Snap Store
+- [x] Signed packages for apt, dnf, Homebrew and Scoop
 - [x] Free hosted server, no setup
 - [ ] Accounts: `ochq login` opens the browser, personal tokens, request history
 - [ ] Reserved subdomains per account
