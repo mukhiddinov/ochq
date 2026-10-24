@@ -103,6 +103,13 @@ sudo apt install ochq
 Requires apt 2.4 or newer (Debian 12+, Ubuntu 22.04+).
 </details>
 
+**Fedora** — from [COPR](https://copr.fedorainfracloud.org/coprs/mukhiddinov/ochq/), built from source on Fedora's servers:
+
+```bash
+sudo dnf copr enable mukhiddinov/ochq
+sudo dnf install ochq
+```
+
 <details>
 <summary><b>Fedora / RHEL / Rocky / Alma (dnf), step by step</b></summary>
 
