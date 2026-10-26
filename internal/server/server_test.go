@@ -78,6 +78,20 @@ func TestRegistryAwait(t *testing.T) {
 	}
 }
 
+// A handshake that finishes after shutdown began must not leave a live
+// tunnel behind: CloseAll has already run and would never close it.
+func TestRegistryActivateAfterCloseAll(t *testing.T) {
+	r := NewRegistry()
+	r.Reserve("myapp")
+	r.CloseAll()
+	if r.Activate("myapp", &tunnel{subdomain: "myapp"}) {
+		t.Fatal("Activate succeeded after CloseAll")
+	}
+	if _, ok := r.Lookup("myapp"); ok {
+		t.Fatal("tunnel registered after CloseAll")
+	}
+}
+
 func TestRegistryReserveRandom(t *testing.T) {
 	r := NewRegistry()
 	seen := map[string]bool{}

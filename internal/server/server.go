@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -163,7 +164,10 @@ func (s *Server) handshake(conn net.Conn) (*tunnel, error) {
 	}
 
 	t := newTunnel(sub, session)
-	s.registry.Activate(sub, t)
+	if !s.registry.Activate(sub, t) {
+		t.close()
+		return nil, errors.New("server is shutting down")
+	}
 	return t, nil
 }
 
