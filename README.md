@@ -6,6 +6,8 @@
 
 Expose a local port to the internet under a public URL — one command, no router setup.
 
+**[ochq.uz](https://ochq.uz)** · [O'zbekcha](https://ochq.uz/) · [English](https://ochq.uz/en/) · [Русский](https://ochq.uz/ru/)
+
 [![CI](https://github.com/mukhiddinov/ochq/actions/workflows/ci.yml/badge.svg)](https://github.com/mukhiddinov/ochq/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/mukhiddinov/ochq?sort=semver)](https://github.com/mukhiddinov/ochq/releases)
 [![Go](https://img.shields.io/github/go-mod/go-version/mukhiddinov/ochq)](go.mod)
@@ -78,8 +80,8 @@ carried back through that connection to your `localhost`.
 | Distribution | Install |
 |---|---|
 | **Fedora** 43+ | `sudo dnf copr enable mukhiddinov/ochq && sudo dnf install ochq` |
-| **Debian / Ubuntu** and derivatives | `curl -fsSL https://mukhiddinov.github.io/ochq/install.sh \| sh` |
-| **RHEL / Rocky / Alma** | `curl -fsSL https://mukhiddinov.github.io/ochq/install.sh \| sh` |
+| **Debian / Ubuntu** and derivatives | `curl -fsSL https://ochq.uz/install.sh \| sh` |
+| **RHEL / Rocky / Alma** | `curl -fsSL https://ochq.uz/install.sh \| sh` |
 | Anything else | the same installer, or a [release archive](https://github.com/mukhiddinov/ochq/releases/latest) (see below) |
 
 **Fedora** — the package is built from source on Fedora's own
@@ -99,8 +101,11 @@ regular system updates keep it up to date. On other distributions it installs
 the checksum-verified binary to `/usr/local/bin`.
 
 ```bash
-curl -fsSL https://mukhiddinov.github.io/ochq/install.sh | sh
+curl -fsSL https://ochq.uz/install.sh | sh
 ```
+
+`https://ochq.uz/install.sh` redirects to the script on GitHub Pages; the full
+address `https://mukhiddinov.github.io/ochq/install.sh` works the same.
 
 <details>
 <summary><b>Debian / Ubuntu (apt), step by step</b></summary>
@@ -178,7 +183,7 @@ so Gatekeeper lets it run. Both Apple Silicon and Intel Macs are supported.
 <summary><b>Without Homebrew</b></summary>
 
 ```bash
-curl -fsSL https://mukhiddinov.github.io/ochq/install.sh | sh
+curl -fsSL https://ochq.uz/install.sh | sh
 ```
 
 or download `ochq_<version>_darwin_arm64.tar.gz` (Apple Silicon) /
