@@ -68,8 +68,15 @@ fi
 step "systemd unit and deploy command"
 install -o root -g root -m 0644 "$SRC/ochq-web.service" /etc/systemd/system/ochq-web.service
 install -o root -g root -m 0755 "$SRC/ochq-web-deploy" /usr/local/bin/ochq-web-deploy
-# For moderation from a root shell: ochq-web list / hide / unhide.
-ln -sfn /opt/ochq-web/current/ochq-web /usr/local/bin/ochq-web
+# For moderation: ochq-web list / hide / unhide. The binary is whatever CI
+# uploaded last, so it runs as ochq_web, never as root: a leaked deploy
+# key must not turn into root the next time someone moderates.
+rm -f /usr/local/bin/ochq-web # was a symlink in the first version of this script
+cat > /usr/local/bin/ochq-web <<'WRAPPER'
+#!/bin/sh
+exec runuser -u ochq_web -- /opt/ochq-web/current/ochq-web "$@"
+WRAPPER
+chmod 0755 /usr/local/bin/ochq-web
 systemctl daemon-reload
 systemctl enable ochq-web >/dev/null # started by the first deploy
 
