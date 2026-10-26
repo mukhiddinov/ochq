@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"log"
 	"os"
 	"slices"
 	"sync"
@@ -84,7 +84,10 @@ func (s *Store) sync() error {
 		}
 		var r record
 		if err := json.Unmarshal(line, &r); err != nil {
-			return fmt.Errorf("web: corrupt comment log at byte %d: %w", s.offset-int64(i+1), err)
+			// One bad line (a write cut short by a full disk or a crash)
+			// must not take the whole page down.
+			log.Printf("web: skipping corrupt comment log line at byte %d: %v", s.offset-int64(i+1), err)
+			continue
 		}
 		s.apply(r)
 	}
@@ -108,6 +111,14 @@ func (s *Store) write(r record) error {
 	line, err := json.Marshal(r)
 	if err != nil {
 		return err
+	}
+	// sync has read every complete line, so bytes past s.offset are a
+	// fragment left by a writer that died. End it, or this record would be
+	// glued onto it.
+	if fi, err := s.f.Stat(); err != nil {
+		return err
+	} else if fi.Size() > s.offset {
+		line = append([]byte{'\n'}, line...)
 	}
 	if _, err := s.f.Write(append(line, '\n')); err != nil {
 		return err

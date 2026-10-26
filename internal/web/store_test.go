@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -105,5 +106,46 @@ func TestStoreSetHiddenUnknown(t *testing.T) {
 	s, _ := openTemp(t)
 	if err := s.SetHidden(42, true); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
+	}
+}
+
+// A writer that dies mid-line (disk full, power loss) leaves a fragment
+// without a newline. The next record must not be glued onto it, and the
+// store must still open after a restart.
+func TestStoreRecoversFromTornLine(t *testing.T) {
+	s, path := openTemp(t)
+	mustAdd(t, s, "one")
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(`{"op":"add","id":2,"bo`)
+	f.Close()
+
+	if c := mustAdd(t, s, "two"); c.ID != 2 {
+		t.Fatalf("id after torn line = %d, want 2", c.ID)
+	}
+	s.Close()
+	s2, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("reopen after torn line: %v", err)
+	}
+	defer s2.Close()
+	got, _ := s2.List(0, 10, false)
+	if len(got) != 2 || got[0].Body != "two" || got[1].Body != "one" {
+		t.Fatalf("after reopen = %+v", got)
+	}
+}
+
+func TestStoreSkipsCorruptLine(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "comments.jsonl")
+	os.WriteFile(path, []byte("{\"op\":\"add\",\"id\":1,\"body\":\"a\",\"lang\":\"uz\"}\nnot json\n"), 0o600)
+	s, err := OpenStore(path)
+	if err != nil {
+		t.Fatalf("open with a corrupt line: %v", err)
+	}
+	defer s.Close()
+	if got, _ := s.List(0, 10, false); len(got) != 1 {
+		t.Fatalf("got %+v", got)
 	}
 }
