@@ -46,6 +46,10 @@ func NewServer(cfg Config) (*Server, error) {
 	s.mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte("ok\n"))
 	})
+	if err := s.routePages(); err != nil {
+		store.Close()
+		return nil, err
+	}
 	return s, nil
 }
 
