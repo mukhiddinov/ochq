@@ -137,3 +137,73 @@ func TestPageWeight(t *testing.T) {
 		t.Fatalf("page weighs %d bytes, budget 100000", total)
 	}
 }
+
+func TestI18nKeysMatch(t *testing.T) {
+	uz, err := loadStrings("uz")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, l := range []string{"en", "ru"} {
+		other, err := loadStrings(l)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for k := range uz {
+			if _, ok := other[k]; !ok {
+				t.Errorf("%s.json lacks %q", l, k)
+			}
+		}
+		for k := range other {
+			if _, ok := uz[k]; !ok {
+				t.Errorf("%s.json has extra key %q", l, k)
+			}
+		}
+	}
+}
+
+func TestPagesAllLangs(t *testing.T) {
+	s := newTestServer(t)
+	for _, tt := range []struct{ path, lang string }{{"/", "uz"}, {"/en/", "en"}, {"/ru/", "ru"}} {
+		body := get(t, s, tt.path).Body.String()
+		for _, want := range []string{
+			`<html lang="` + tt.lang + `">`,
+			`<link rel="canonical" href="https://ochq.uz` + tt.path + `">`,
+			`hreflang="uz" href="https://ochq.uz/"`,
+			`hreflang="en" href="https://ochq.uz/en/"`,
+			`hreflang="ru" href="https://ochq.uz/ru/"`,
+			`hreflang="x-default" href="https://ochq.uz/"`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s lacks %s", tt.path, want)
+			}
+		}
+	}
+}
+
+func TestRedirectsNoSlash(t *testing.T) {
+	s := newTestServer(t)
+	for _, p := range []string{"/en", "/ru"} {
+		w := get(t, s, p)
+		if w.Code != http.StatusMovedPermanently || w.Header().Get("Location") != p+"/" {
+			t.Errorf("%s: %d %q", p, w.Code, w.Header().Get("Location"))
+		}
+	}
+}
+
+func TestRobotsSitemap(t *testing.T) {
+	s := newTestServer(t)
+	if b := get(t, s, "/robots.txt").Body.String(); !strings.Contains(b, "Sitemap: https://ochq.uz/sitemap.xml") {
+		t.Errorf("robots.txt = %q", b)
+	}
+	w := get(t, s, "/sitemap.xml")
+	if !strings.HasPrefix(w.Header().Get("Content-Type"), "application/xml") {
+		t.Errorf("sitemap Content-Type %q", w.Header().Get("Content-Type"))
+	}
+	b := w.Body.String()
+	for _, want := range []string{"<loc>https://ochq.uz/</loc>", "<loc>https://ochq.uz/en/</loc>", "<loc>https://ochq.uz/ru/</loc>",
+		`<xhtml:link rel="alternate" hreflang="ru" href="https://ochq.uz/ru/"/>`} {
+		if !strings.Contains(b, want) {
+			t.Errorf("sitemap lacks %s", want)
+		}
+	}
+}
