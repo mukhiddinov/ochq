@@ -168,8 +168,8 @@ copy their look and animation logic, not reinvent it.
 - Deploy: same pattern as ochqd — CI on push to main builds the binary and
   ships it over SSH to a forced-command deploy script (`ochq-web-deploy`)
   with atomic symlink switch and rollback on failed health check. It gets
-  its own deploy user `ochq_web_deploy`, its own SSH key and its own GitHub
-  secrets, so the ochqd deploy path is not touched. (Claude's call.)
+  the existing deploy user and key: `ochq-deploy` hands `web <version>` to
+  `ochq-web-deploy` (user's decision: no new key or secret).
 - CI deploys by changed paths: changes under `web/`, `cmd/ochq-web/`,
   `internal/web/` deploy only ochq-web; ochqd deploys only when its own code
   changes, so landing PRs never restart people's tunnels. (Claude's call.)

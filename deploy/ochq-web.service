@@ -1,0 +1,47 @@
+[Unit]
+Description=OCHQ landing page (ochq.uz) and comments
+Documentation=https://github.com/mukhiddinov/ochq
+# The listen address belongs to Docker's "edge" bridge (Traefik's network),
+# which exists only once Docker is up.
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ochq_web
+Group=ochq_web
+# /var/lib/ochq-web holds comments.jsonl, writable despite ProtectSystem=strict.
+StateDirectory=ochq-web
+StateDirectoryMode=0750
+EnvironmentFile=/etc/ochq/ochq-web.env
+# /opt/ochq-web/current is a symlink to the active release (see ochq-web-deploy).
+ExecStart=/opt/ochq-web/current/ochq-web serve
+Restart=always
+RestartSec=5s
+MemoryMax=128M
+TasksMax=64
+
+# Sandboxing: ochq-web only needs the network.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target
