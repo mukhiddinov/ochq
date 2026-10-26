@@ -87,7 +87,7 @@ func TestInstallCommandsMatchReadme(t *testing.T) {
 	page := get(t, newTestServer(t), "/").Body.String()
 	for _, cmd := range []string{
 		"brew install --cask mukhiddinov/tap/ochq",
-		"curl -fsSL https://mukhiddinov.github.io/ochq/install.sh | sh",
+		"curl -fsSL https://ochq.uz/install.sh | sh",
 		"sudo dnf copr enable mukhiddinov/ochq",
 		"sudo dnf install ochq",
 		"scoop bucket add ochq https://github.com/mukhiddinov/scoop-bucket",
