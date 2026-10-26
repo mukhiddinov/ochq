@@ -23,13 +23,16 @@ if [[ ! "$VERSION" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
 fi
 
 RELEASES="$BASE/releases"
-REL="$RELEASES/$VERSION"
 
 # 1. Receive the binary from stdin into a temp dir next to the releases,
 #    so the final mv is an atomic rename on the same filesystem.
 TMP=$(mktemp -d "$RELEASES/.incoming.XXXXXX")
 trap 'rm -rf "$TMP"' EXIT
 chmod 0755 "$TMP"
+# A fresh directory per upload (mktemp's unique suffix): redeploying the
+# same version ("Run workflow") must never delete the live release or make
+# it its own rollback target.
+REL="$RELEASES/${VERSION}_${TMP##*.}"
 head -c "$MAX_BYTES" > "$TMP/ochq-web"
 chmod 0755 "$TMP/ochq-web"
 
@@ -47,7 +50,6 @@ if ! got=$(runuser -u ochq_web -- "$TMP/ochq-web" -version 2>&1) || [[ "$got" !=
 fi
 log "received $got"
 
-rm -rf "$REL"
 mv "$TMP" "$REL"
 
 # 3. Switch the symlink atomically and restart.
