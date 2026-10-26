@@ -198,6 +198,9 @@ func (s *Server) claim(hello *proto.Hello) (string, *proto.HandshakeError) {
 	if err != nil {
 		return reject(proto.ErrCodeInvalidSubdomain, "invalid subdomain %q", hello.Subdomain)
 	}
+	if isReserved(sub) {
+		return reject(proto.ErrCodeInvalidSubdomain, "subdomain %q is reserved", sub)
+	}
 	if !s.registry.Reserve(sub) {
 		return reject(proto.ErrCodeSubdomainTaken, "subdomain %q is already in use", sub)
 	}

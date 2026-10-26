@@ -48,7 +48,7 @@ func (r *Registry) Reserve(sub string) bool {
 func (r *Registry) ReserveRandom() (string, error) {
 	for range randomAttempts {
 		sub := randomSubdomain()
-		if r.Reserve(sub) {
+		if !isReserved(sub) && r.Reserve(sub) {
 			return sub, nil
 		}
 	}

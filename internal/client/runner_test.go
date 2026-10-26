@@ -91,15 +91,15 @@ func TestTunnelEndToEnd(t *testing.T) {
 	resp, errc := startClient(t, ctx, Config{
 		ServerAddr:  tunnelAddr,
 		LocalAddr:   local.Listener.Addr().String(),
-		Subdomain:   "demo",
+		Subdomain:   "myapp",
 		Fingerprint: fp,
 	})
-	if resp.Subdomain != "demo" || resp.PublicURL != "http://demo.ochq.test" {
+	if resp.Subdomain != "myapp" || resp.PublicURL != "http://myapp.ochq.test" {
 		t.Fatalf("unexpected hello response %+v", resp)
 	}
 
-	code, body := get(t, "POST", httpURL+"/api/v1?x=1", "demo.ochq.test", "payload")
-	if want := "POST /api/v1?x=1 host=demo.ochq.test body=payload"; code != 200 || body != want {
+	code, body := get(t, "POST", httpURL+"/api/v1?x=1", "myapp.ochq.test", "payload")
+	if want := "POST /api/v1?x=1 host=myapp.ochq.test body=payload"; code != 200 || body != want {
 		t.Fatalf("got %d %q, want 200 %q", code, body, want)
 	}
 
@@ -108,7 +108,7 @@ func TestTunnelEndToEnd(t *testing.T) {
 	for i := range 20 {
 		wg.Go(func() {
 			path := fmt.Sprintf("/req/%d", i)
-			if code, body := get(t, "GET", httpURL+path, "demo.ochq.test", ""); code != 200 || !strings.Contains(body, path) {
+			if code, body := get(t, "GET", httpURL+path, "myapp.ochq.test", ""); code != 200 || !strings.Contains(body, path) {
 				t.Errorf("%s: got %d %q", path, code, body)
 			}
 		})
@@ -147,9 +147,9 @@ func TestSubdomainTaken(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	tunnelAddr, _, fp := startServer(t, ctx)
-	startClient(t, ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "demo", Fingerprint: fp})
+	startClient(t, ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "myapp", Fingerprint: fp})
 
-	err := Run(ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "demo", Fingerprint: fp})
+	err := Run(ctx, Config{ServerAddr: tunnelAddr, LocalAddr: "127.0.0.1:1", Subdomain: "myapp", Fingerprint: fp})
 	if err == nil || !strings.Contains(err.Error(), string(proto.ErrCodeSubdomainTaken)) {
 		t.Fatalf("got %v, want subdomain_taken", err)
 	}
