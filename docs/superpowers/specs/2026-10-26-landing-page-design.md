@@ -158,12 +158,13 @@ copy their look and animation logic, not reinvent it.
 ### ochq-web service
 
 - Runs on the host as systemd unit `ochq-web` under its own user
-  (`ochq_web`, or reuse `ochq` — builder's call, but namespaced under ochq),
-  listening on a loopback-reachable port for Traefik the same way ochqd does
-  (`host.docker.internal`), port chosen not to clash (check `ss -ltnp`).
-- Data: SQLite file under `/var/lib/ochq-web/` (pure-Go driver,
-  `modernc.org/sqlite`, so cross-compiling stays CGO-free). Schema: `comments(id,
-  name, body, lang, created_at, ip_hash, hidden)`.
+  `ochq_web`, listening on `172.30.0.1:8090` — the Docker `edge` network's
+  gateway, reachable by Traefik but not from the internet.
+- Data: append-only JSON-lines log `/var/lib/ochq-web/comments.jsonl`
+  (`add` / `hide` / `unhide` records; the server picks up records appended
+  by the moderation CLI without a restart). Not SQLite: COPR vendors every
+  module in go.mod, and a pure-Go SQLite would add tens of MB to each SRPM.
+  (Claude's call, changed during planning.)
 - Deploy: same pattern as ochqd — CI on push to main builds the binary and
   ships it over SSH to a forced-command deploy script (`ochq-web-deploy`)
   with atomic symlink switch and rollback on failed health check. It gets
@@ -226,7 +227,7 @@ time, or redirected). The page and README may then show
 Small PRs, one step each, tests in every PR, the user merges, CI deploys:
 
 1. `ochqd` reserved subdomains.
-2. `cmd/ochq-web`: static serving + comments API + SQLite + moderation CLI,
+2. `cmd/ochq-web`: static serving + comments API + comment log + moderation CLI,
    with tests.
 3. Static site in Uzbek (all sections, animations).
 4. English and Russian pages, SEO files.
