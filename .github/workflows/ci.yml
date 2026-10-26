@@ -131,11 +131,11 @@ jobs:
 
       - name: Configure SSH
         env:
-          WEB_DEPLOY_SSH_KEY: ${{ secrets.WEB_DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$WEB_DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
 
@@ -144,6 +144,6 @@ jobs:
           DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
           DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
         run: |
-          # The key's forced command runs `ochq-web-deploy $VERSION` and
-          # reads the binary from stdin.
-          ssh -o BatchMode=yes -p "$DEPLOY_PORT" "ochq_web_deploy@$DEPLOY_HOST" "$VERSION" < ochq-web
+          # Same key as ochqd: its forced command runs `ochq-deploy "web $VERSION"`,
+          # which hands the binary on stdin to ochq-web-deploy.
+          ssh -o BatchMode=yes -p "$DEPLOY_PORT" "ochq_deploy@$DEPLOY_HOST" "web $VERSION" < ochq-web

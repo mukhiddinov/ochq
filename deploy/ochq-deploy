@@ -3,6 +3,7 @@
 # command the CI deploy key may run (see authorized_keys forced command):
 #
 #   ssh ochq_deploy@vps <version> < ochqd
+#   ssh ochq_deploy@vps web <version> < ochq-web
 #
 # Layout:
 #   /opt/ochq/releases/<version>/ochqd
@@ -15,6 +16,12 @@ KEEP=5
 MAX_BYTES=$((100 * 1024 * 1024))
 
 log() { echo "ochq-deploy: $*" >&2; }
+
+# The same deploy key also ships the landing page: "web <version>" hands
+# the upload to ochq-web-deploy (installed by setup-ochq-web.sh).
+if [[ "${1:-}" =~ ^web\ ([A-Za-z0-9._-]{1,64})$ ]]; then
+    exec /usr/local/bin/ochq-web-deploy "${BASH_REMATCH[1]}"
+fi
 
 VERSION="${1:-}"
 if [[ ! "$VERSION" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
