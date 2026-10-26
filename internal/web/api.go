@@ -20,7 +20,7 @@ const (
 	maxPageSize  = 50
 )
 
-var langs = map[string]bool{"uz": true, "en": true, "ru": true}
+var commentLangs = map[string]bool{"uz": true, "en": true, "ru": true}
 
 type commentRequest struct {
 	Name    string `json:"name"`
@@ -81,7 +81,7 @@ func (s *Server) postComment(w http.ResponseWriter, r *http.Request) {
 // validate returns why c cannot be stored, or "".
 func validate(c Comment) string {
 	switch {
-	case !langs[c.Lang]:
+	case !commentLangs[c.Lang]:
 		return "unknown language"
 	case c.Body == "":
 		return "comment is empty"

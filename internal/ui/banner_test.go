@@ -3,6 +3,7 @@ package ui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -120,5 +121,50 @@ func TestAnimationStopsOnCancel(t *testing.T) {
 	}
 	if !strings.HasSuffix(buf.String(), showCursor) {
 		t.Error("cursor not restored after cancel")
+	}
+}
+
+func TestAnimationFrames(t *testing.T) {
+	frames := AnimationFrames()
+	if want := len(typing) + 2*blinkTimes; len(frames) != want {
+		t.Fatalf("%d frames, want %d", len(frames), want)
+	}
+	plain := &Printer{}
+	first := plain.bannerLines("o", "", true)
+	for r := range bannerRows {
+		if got, want := frames[0].Rows[r], strings.TrimRight(first[r], " "); got != want {
+			t.Fatalf("frame 0 row %d = %q, want %q", r, got, want)
+		}
+	}
+	if frames[0].DelayMs != int(typing[0].delay.Milliseconds()) {
+		t.Fatalf("frame 0 delay %d", frames[0].DelayMs)
+	}
+	for i := range blinkTimes {
+		off, on := frames[len(typing)+2*i], frames[len(typing)+2*i+1]
+		if strings.Contains(off.Rows[caretRow], caret) || !strings.Contains(on.Rows[caretRow], caret) {
+			t.Fatalf("blink %d: off=%q on=%q", i, off.Rows[caretRow], on.Rows[caretRow])
+		}
+		if off.DelayMs != 350 || on.DelayMs != 450 {
+			t.Fatalf("blink %d delays %d/%d", i, off.DelayMs, on.DelayMs)
+		}
+	}
+	for _, f := range frames {
+		for _, row := range f.Rows {
+			if strings.Contains(row, "\033") {
+				t.Fatalf("frame has escape codes: %q", row)
+			}
+		}
+	}
+}
+
+func TestRowHexMatchesRowColors(t *testing.T) {
+	// xterm 256-color cube: 16 + 36r + 6g + b, levels 0,95,135,175,215,255.
+	levels := []int{0, 95, 135, 175, 215, 255}
+	for r, c := range rowColors {
+		n := c - 16
+		want := fmt.Sprintf("#%02x%02x%02x", levels[n/36], levels[n/6%6], levels[n%6])
+		if RowHex[r] != want {
+			t.Errorf("RowHex[%d] = %s, want %s (xterm %d)", r, RowHex[r], want, c)
+		}
 	}
 }

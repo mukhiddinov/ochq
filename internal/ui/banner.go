@@ -233,3 +233,44 @@ func (p *Printer) Close() {
 		p.hidCursor = false
 	}
 }
+
+// Frame is one step of the banner animation without terminal colors, for
+// replaying it elsewhere (the ochq.uz install demo).
+type Frame struct {
+	Rows    [bannerRows]string `json:"rows"`
+	DelayMs int                `json:"delay_ms"`
+}
+
+// RowHex are rowColors as CSS colors.
+var RowHex = [bannerRows]string{"#00ffff", "#00d7ff", "#00afff", "#0087ff", "#5f5fff", "#875fff"}
+
+// Tagline is printed under the version on the finished banner.
+const Tagline = tagline
+
+// AnimationFrames returns the frames typeBanner draws before the final
+// one: the typing with the caret, then the caret blinking. FinalFrame is
+// the finished logo; the version and tagline go to its right.
+func AnimationFrames() []Frame {
+	p := &Printer{}
+	frame := func(word string, withCaret bool, d time.Duration) Frame {
+		f := Frame{DelayMs: int(d.Milliseconds())}
+		for r, l := range p.bannerLines(word, "", withCaret) {
+			f.Rows[r] = strings.TrimRight(l, " ")
+		}
+		return f
+	}
+	var out []Frame
+	for _, f := range typing {
+		out = append(out, frame(f.word, true, f.delay))
+	}
+	name := typing[len(typing)-1].word
+	for range blinkTimes {
+		out = append(out, frame(name, false, blink.off), frame(name, true, blink.on))
+	}
+	return out
+}
+
+// FinalFrame is the finished logo, padded to its full width.
+func FinalFrame() [bannerRows]string {
+	return (&Printer{}).bannerLines(typing[len(typing)-1].word, "", false)
+}
