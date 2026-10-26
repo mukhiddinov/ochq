@@ -45,6 +45,7 @@
   "install_more": "Boshqa usullar va yangilash — <a href=\"https://github.com/mukhiddinov/ochq#installation\">README</a>.",
   "usage_eyebrow": "// ISHLATISH",
   "usage_h2": "Port raqamini yozing — tamom",
+  "sub_name": "mening-saytim",
   "usage_random": "tasodifiy manzil, masalan https://a7f3.ochq.uz",
   "usage_sub": "o'zingiz tanlagan manzil: https://mening-saytim.ochq.uz",
   "usage_host": "boshqa host yoki konteynerdagi ilova",
