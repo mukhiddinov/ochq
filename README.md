@@ -14,7 +14,7 @@ Expose a local port to the internet under a public URL — one command, no route
 </div>
 
 ```text
-$ ochq 3000 --sub demo
+$ ochq 3000 --sub myapp
             _
   ___   ___| |__   __ _
  / _ \ / __| '_ \ / _` |
@@ -24,7 +24,7 @@ $ ochq 3000 --sub demo
 
 [✓] Status:       Online
 [✓] Forwarding:   http://localhost:3000
-[✓] Public URL:   https://demo.ochq.uz
+[✓] Public URL:   https://myapp.ochq.uz
 
 Logs (Ctrl+C to stop):
 14:02:07  GET    /api/v1/health        200 OK              14ms
@@ -355,7 +355,7 @@ To remove the package repository as well:
 ## How it works
 
 ```text
- Browser ── https://demo.ochq.uz ──▶  edge proxy (TLS, *.ochq.uz certificate)
+ Browser ── https://myapp.ochq.uz ──▶ edge proxy (TLS, *.ochq.uz certificate)
                                               │
                                               ▼
                                            ochqd ── picks the tunnel by Host header
@@ -415,8 +415,8 @@ Run everything locally — `*.localhost` always resolves to `127.0.0.1`:
 ```bash
 go run ./cmd/ochqd                                      # terminal 1, prints its fingerprint
 python3 -m http.server 3000                             # terminal 2
-go run ./cmd/ochq 3000 --sub demo --server localhost:9000 --fingerprint SHA256:...   # terminal 3
-curl http://demo.localhost:8080/                        # terminal 4
+go run ./cmd/ochq 3000 --sub myapp --server localhost:9000 --fingerprint SHA256:...   # terminal 3
+curl http://myapp.localhost:8080/                       # terminal 4
 ```
 
 | Path | Contents |
