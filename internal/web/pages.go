@@ -24,6 +24,8 @@ type lang struct {
 
 var langs = []lang{
 	{"uz", "/", "UZ", "uz_UZ"},
+	{"en", "/en/", "EN", "en_US"},
+	{"ru", "/ru/", "RU", "ru_RU"},
 }
 
 // jsKeys are the strings site.js needs; they go into the page as JSON.
@@ -133,6 +135,9 @@ func (s *Server) routePages() error {
 			w.Header().Set("Cache-Control", "public, max-age=300")
 			w.Write(body)
 		})
+		if path != "/" { // /en -> /en/, permanently, so search engines keep one URL
+			s.mux.Handle("GET "+strings.TrimSuffix(path, "/"), http.RedirectHandler(path, http.StatusMovedPermanently))
+		}
 	}
 	static, err := fs.Sub(site.FS, "site")
 	if err != nil {
@@ -149,8 +154,34 @@ func (s *Server) routePages() error {
 	})
 	s.mux.Handle("GET /assets/", cached)
 	s.mux.Handle("GET /favicon.svg", cached)
+	s.mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		fmt.Fprintf(w, "User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: %s/sitemap.xml\n", origin)
+	})
+	sitemap := sitemapXML()
+	s.mux.HandleFunc("GET /sitemap.xml", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.Write(sitemap)
+	})
 	s.mux.HandleFunc("GET /install.sh", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "https://mukhiddinov.github.io/ochq/install.sh", http.StatusFound)
 	})
 	return nil
+}
+
+// sitemapXML lists every translation with its alternates, as Google
+// recommends for multilingual pages.
+func sitemapXML() []byte {
+	var b bytes.Buffer
+	b.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
+	b.WriteString(`<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">` + "\n")
+	for _, l := range langs {
+		fmt.Fprintf(&b, "  <url>\n    <loc>%s%s</loc>\n", origin, l.Path)
+		for _, a := range langs {
+			fmt.Fprintf(&b, "    <xhtml:link rel=\"alternate\" hreflang=%q href=\"%s%s\"/>\n", a.Lang, origin, a.Path)
+		}
+		fmt.Fprintf(&b, "    <xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"%s/\"/>\n  </url>\n", origin)
+	}
+	b.WriteString("</urlset>\n")
+	return b.Bytes()
 }
