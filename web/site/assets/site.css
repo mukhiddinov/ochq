@@ -6,6 +6,7 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
+section { scroll-margin-top: 56px; }
 body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--sans); overflow-x: hidden; }
 a { color: var(--cyan); text-decoration: none; }
 a:hover { text-decoration: underline; }
