@@ -26,6 +26,7 @@ type Registry struct {
 	// pending holds a channel per reservation, closed when it is activated
 	// or released.
 	pending map[string]chan struct{}
+	closed  bool // CloseAll ran: the server is shutting down
 }
 
 func NewRegistry() *Registry {
@@ -55,12 +56,18 @@ func (r *Registry) ReserveRandom() (string, error) {
 	return "", errNoSubdomain
 }
 
-// Activate attaches t to a previously reserved sub.
-func (r *Registry) Activate(sub string, t *tunnel) {
+// Activate attaches t to a previously reserved sub. It reports false, and
+// releases sub, once CloseAll has run: that tunnel would never be closed.
+func (r *Registry) Activate(sub string, t *tunnel) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	defer r.settle(sub)
+	if r.closed {
+		delete(r.tunnels, sub)
+		return false
+	}
 	r.tunnels[sub] = t
-	r.settle(sub)
+	return true
 }
 
 // Remove deletes sub only if it still points to t. Passing nil releases a
@@ -115,14 +122,15 @@ func (r *Registry) Await(ctx context.Context, sub string, max time.Duration) (*t
 // CloseAll closes every active tunnel. Their handlers remove them from the
 // registry as their sessions shut down.
 func (r *Registry) CloseAll() {
-	r.mu.RLock()
+	r.mu.Lock()
+	r.closed = true
 	active := make([]*tunnel, 0, len(r.tunnels))
 	for _, t := range r.tunnels {
 		if t != nil {
 			active = append(active, t)
 		}
 	}
-	r.mu.RUnlock()
+	r.mu.Unlock()
 
 	// Close outside the lock: closing a session can block briefly.
 	for _, t := range active {
