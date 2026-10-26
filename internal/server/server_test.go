@@ -124,12 +124,14 @@ func TestHandshakeRejects(t *testing.T) {
 		{"type", proto.Hello{Version: proto.Version, Type: "udp"}, proto.ErrCodeBadRequest},
 		{"token", proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP, Token: "wrong"}, proto.ErrCodeUnauthorized},
 		{"invalid", proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP, Token: "s3cret", Subdomain: "a_b"}, proto.ErrCodeInvalidSubdomain},
-		{"taken", proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP, Token: "s3cret", Subdomain: "demo"}, proto.ErrCodeSubdomainTaken},
+		{"taken", proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP, Token: "s3cret", Subdomain: "myapp"}, proto.ErrCodeSubdomainTaken},
+		{"reserved", proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP, Token: "s3cret", Subdomain: "www"}, proto.ErrCodeInvalidSubdomain},
+		{"reserved case", proto.Hello{Version: proto.Version, Type: proto.TunnelHTTP, Token: "s3cret", Subdomain: " Demo "}, proto.ErrCodeInvalidSubdomain},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := New(Config{Domain: "ochq.uz", Token: "s3cret"})
-			s.registry.Reserve("demo")
+			s.registry.Reserve("myapp")
 
 			clientConn, serverConn := net.Pipe()
 			defer clientConn.Close()
@@ -156,6 +158,19 @@ func TestHandshakeRejects(t *testing.T) {
 				t.Fatalf("server error = %v, want code %q", err, tt.code)
 			}
 		})
+	}
+}
+
+func TestIsReserved(t *testing.T) {
+	for _, s := range []string{"www", "api", "admin", "mail", "login", "status", "docs", "blog", "app", "dashboard", "ochq", "tunnel", "pkg", "demo"} {
+		if !isReserved(s) {
+			t.Errorf("%q should be reserved", s)
+		}
+	}
+	for _, s := range []string{"myapp", "a7f3", "demo2", "wwww"} {
+		if isReserved(s) {
+			t.Errorf("%q should not be reserved", s)
+		}
 	}
 }
 
