@@ -99,7 +99,7 @@ copy their look and animation logic, not reinvent it.
    Snap Store approves the name.
 6. Usage — `ochq 3000`, `ochq 3000 --sub mening-saytim`, link to README for
    self-hosting.
-7. Developer — Khusniddin Mukhiddinov, Middle Software Engineer. Short bio
+7. Developer — Khusniddin Mukhiddinov, Software Engineer. Short bio
    (one–two sentences: author of ochq). Skills: Backend — Java, Python, Go;
    DevOps — Linux, Docker, CI/CD (GitHub Actions), Traefik/Nginx, systemd.
    Links: GitHub `https://github.com/mukhiddinov`, LinkedIn
