@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.T.title}}</title>
+<meta name="description" content="{{.T.description}}">
+<link rel="canonical" href="{{.Canonical}}">
+{{- range .Alternates}}
+<link rel="alternate" hreflang="{{.Lang}}" href="{{.URL}}">
+{{- end}}
+<link rel="alternate" hreflang="x-default" href="https://ochq.uz/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ochq">
+<meta property="og:title" content="{{.T.title}}">
+<meta property="og:description" content="{{.T.description}}">
+<meta property="og:url" content="{{.Canonical}}">
+<meta property="og:image" content="https://ochq.uz/assets/og.png">
+<meta property="og:locale" content="{{.Locale}}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#030712">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;800&display=swap">
+<link rel="stylesheet" href="/assets/site.css">
+<script type="application/ld+json">{{.LD}}</script>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="{{.Path}}">ochq<span>_</span></a>
+  <nav aria-label="sections">
+    <a href="#how">{{.T.nav_how}}</a>
+    <a href="#install">{{.T.nav_install}}</a>
+    <a href="#comments">{{.T.nav_comments}}</a>
+  </nav>
+  <div class="langs">
+    {{- range .Alternates}}
+    <a href="{{.Path}}" hreflang="{{.Lang}}" data-lang="{{.Lang}}"{{if eq .Lang $.Lang}} aria-current="page"{{end}}>{{.Label}}</a>
+    {{- end}}
+  </div>
+  <a class="star" href="https://github.com/mukhiddinov/ochq">★ <span>{{.T.star}}</span></a>
+</header>
+
+<main>
+<section id="hero" class="hero">
+  <canvas aria-hidden="true"></canvas>
+  <div class="hero-copy">
+    <div class="logo" aria-hidden="true">ochq<span>_</span></div>
+    <h1>{{.T.hero_h1}}</h1>
+    <p class="tag">{{.T.hero_tag}}</p>
+    <div class="cmd"><code><span class="p">$</span> <b>ochq</b> 3000</code><button class="copy" type="button" data-copy="ochq 3000">{{.T.copy}}</button></div>
+  </div>
+</section>
+
+<section id="how" class="wrap">
+  <div class="eyebrow">{{.T.how_eyebrow}}</div>
+  <h2>{{.T.how_h2}}</h2>
+  <p class="lead">{{.T.how_lead}}</p>
+  <div class="how-grid">
+    <ol class="steps">
+      <li class="step" data-s="1"><span class="n">01</span><h3>{{.T.s1_t}}</h3><p>{{.T.s1_p}}</p></li>
+      <li class="step" data-s="2"><span class="n">02</span><h3>{{.T.s2_t}}</h3><p>{{.T.s2_p}}</p></li>
+      <li class="step" data-s="3"><span class="n">03</span><h3>{{.T.s3_t}}</h3><p>{{.T.s3_p}}</p></li>
+      <li class="step" data-s="4"><span class="n">04</span><h3>{{.T.s4_t}}</h3><p>{{.T.s4_p}}</p></li>
+    </ol>
+    <div class="stage" aria-hidden="true">
+      <canvas></canvas>
+      <svg viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <linearGradient id="tubeG" x1="0" x2="1"><stop offset="0" stop-color="#38e1ff"/><stop offset="1" stop-color="#2f6bff"/></linearGradient>
+        </defs>
+        <rect x="30" y="170" width="250" height="180" rx="14" fill="#081429" stroke="#1f3560"/>
+        <text x="48" y="196" font-size="12" class="muted">{{.T.stage_pc}}</text>
+        <rect x="48" y="222" width="96" height="76" rx="10" fill="#0b1a35" stroke="#2a4a80"/>
+        <text x="62" y="252" font-size="13">{{.T.stage_app}}</text><text x="58" y="276" font-size="12" fill="#7dffb2">:3000</text>
+        <rect x="176" y="222" width="86" height="76" rx="10" fill="#0b1a35" stroke="#38e1ff"/>
+        <text x="194" y="252" font-size="13">ochq</text><text x="186" y="276" font-size="11" class="muted">{{.T.stage_client}}</text>
+        <text x="48" y="330" font-size="12" class="muted" data-term>$ ochq 3000</text>
+        <line x1="330" y1="120" x2="330" y2="400" stroke="#ff6b8b" stroke-opacity=".5" stroke-dasharray="6 8"/>
+        <text x="300" y="112" font-size="11" fill="#ff8ea6">NAT / firewall</text>
+        <path d="M262,260 L585,260" stroke="#13254a" stroke-width="18" stroke-linecap="round" fill="none"/>
+        <path data-path="tube" d="M262,260 L585,260" stroke="url(#tubeG)" stroke-width="3" fill="none" filter="url(#glow)" stroke-dasharray="323" stroke-dashoffset="0"/>
+        <text x="370" y="236" font-size="11" class="muted" data-tube-label>TLS 1.3 · yamux tunnel</text>
+        <circle cx="620" cy="260" r="46" fill="#0a1838" stroke="#2f6bff" stroke-width="2" filter="url(#glow)"/>
+        <text x="620" y="256" font-size="14" text-anchor="middle" font-weight="600">ochqd</text>
+        <text x="620" y="274" font-size="10" text-anchor="middle" class="muted">tunnel.ochq.uz</text>
+        <g data-url><rect x="530" y="330" width="180" height="30" rx="8" fill="#062a2a" stroke="#7dffb2"/>
+          <text x="620" y="350" font-size="12" text-anchor="middle" fill="#7dffb2">https://demo.ochq.uz</text></g>
+        <path data-path="local" d="M144,260 L176,260" stroke="#2a4a80" stroke-width="2"/>
+        <path data-path="v0" d="M666,260 L860,110" stroke="#1f3560" stroke-width="1.5" fill="none"/>
+        <path data-path="v1" d="M666,260 L860,260" stroke="#1f3560" stroke-width="1.5" fill="none"/>
+        <path data-path="v2" d="M666,260 L860,410" stroke="#1f3560" stroke-width="1.5" fill="none"/>
+        <g font-size="12">
+          <circle cx="890" cy="110" r="28" fill="#0b1a35" stroke="#a98bff"/><text x="890" y="114" text-anchor="middle">🌐</text><text x="890" y="160" text-anchor="middle" class="muted" font-size="11">{{.T.stage_browser}}</text>
+          <circle cx="890" cy="260" r="28" fill="#0b1a35" stroke="#a98bff"/><text x="890" y="264" text-anchor="middle">📱</text><text x="890" y="310" text-anchor="middle" class="muted" font-size="11">{{.T.stage_phone}}</text>
+          <circle cx="890" cy="410" r="28" fill="#0b1a35" stroke="#a98bff"/><text x="890" y="414" text-anchor="middle">🤖</text><text x="890" y="460" text-anchor="middle" class="muted" font-size="11">{{.T.stage_webhook}}</text>
+        </g>
+        <text x="860" y="40" font-size="12" class="muted" text-anchor="middle">INTERNET</text>
+        <g data-packets></g>
+      </svg>
+      <div class="cap" data-cap></div>
+    </div>
+  </div>
+  <h3 class="can">{{.T.can_h2}}</h3>
+  <ul class="chips">
+    <li>{{.T.chip1}}</li><li>{{.T.chip2}}</li><li>{{.T.chip3}}</li><li>{{.T.chip4}}</li><li>{{.T.chip5}}</li>
+  </ul>
+</section>
+
+<section id="install" class="wrap">
+  <div class="eyebrow">{{.T.install_eyebrow}}</div>
+  <h2>{{.T.install_h2}}</h2>
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tab-mac" aria-controls="os-mac" data-os="mac" aria-selected="true">macOS</button>
+    <button type="button" role="tab" id="tab-linux" aria-controls="os-linux" data-os="linux" aria-selected="false" tabindex="-1">Linux</button>
+    <button type="button" role="tab" id="tab-win" aria-controls="os-win" data-os="win" aria-selected="false" tabindex="-1">Windows</button>
+  </div>
+  <div class="term" aria-hidden="true" data-version="{{.Version}}">
+    <div class="bar"><i class="dot r"></i><i class="dot y"></i><i class="dot g"></i><span class="t" data-title></span></div>
+    <pre data-screen></pre>
+  </div>
+  <div class="panels">
+    <div role="tabpanel" id="os-mac" aria-labelledby="tab-mac" data-os="mac">
+      <p>{{.T.install_mac}}</p>
+      <div class="code"><pre><code>brew install --cask mukhiddinov/tap/ochq</code></pre><button class="copy" type="button">{{.T.copy}}</button></div>
+    </div>
+    <div role="tabpanel" id="os-linux" aria-labelledby="tab-linux" data-os="linux" hidden>
+      <p>{{.T.install_linux_any}}</p>
+      <div class="code"><pre><code>curl -fsSL https://mukhiddinov.github.io/ochq/install.sh | sh</code></pre><button class="copy" type="button">{{.T.copy}}</button></div>
+      <p>{{.T.install_fedora}}</p>
+      <div class="code"><pre><code>sudo dnf copr enable mukhiddinov/ochq
+sudo dnf install ochq</code></pre><button class="copy" type="button">{{.T.copy}}</button></div>
+    </div>
+    <div role="tabpanel" id="os-win" aria-labelledby="tab-win" data-os="win" hidden>
+      <p>{{.T.install_win}}</p>
+      <div class="code"><pre><code>scoop bucket add ochq https://github.com/mukhiddinov/scoop-bucket
+scoop install ochq</code></pre><button class="copy" type="button">{{.T.copy}}</button></div>
+    </div>
+    <p class="more">{{.T.install_more}}</p>
+  </div>
+</section>
+
+<section id="usage" class="wrap">
+  <div class="eyebrow">{{.T.usage_eyebrow}}</div>
+  <h2>{{.T.usage_h2}}</h2>
+  <dl class="usage">
+    <dt><code>ochq 3000</code></dt><dd>{{.T.usage_random}}</dd>
+    <dt><code>ochq 3000 --sub mening-saytim</code></dt><dd>{{.T.usage_sub}}</dd>
+    <dt><code>ochq 192.168.1.10:8080</code></dt><dd>{{.T.usage_host}}</dd>
+  </dl>
+  <p class="more">{{.T.usage_self}}</p>
+</section>
+
+<section id="about" class="wrap">
+  <div class="eyebrow">{{.T.about_eyebrow}}</div>
+  <h2>{{.T.about_h2}}</h2>
+  <div class="card about">
+    <div>
+      <h3>Khusniddin Mukhiddinov</h3>
+      <p class="role">Middle Software Engineer</p>
+      <p>{{.T.about_bio}}</p>
+      <p class="links"><a href="https://github.com/mukhiddinov">GitHub</a><a href="https://www.linkedin.com/in/khusniddin-mukhiddinov">LinkedIn</a></p>
+    </div>
+    <div class="skills">
+      <h4>{{.T.about_backend}}</h4>
+      <ul><li>Java</li><li>Python</li><li>Go</li></ul>
+      <h4>{{.T.about_devops}}</h4>
+      <ul><li>Linux</li><li>Docker</li><li>CI/CD · GitHub Actions</li><li>Traefik / Nginx</li><li>systemd</li></ul>
+    </div>
+  </div>
+</section>
+
+<section id="comments" class="wrap">
+  <div class="eyebrow">{{.T.comments_eyebrow}}</div>
+  <h2>{{.T.comments_h2}}</h2>
+  <p class="lead">{{.T.comments_lead}}</p>
+  <form class="card form" data-form>
+    <label>{{.T.f_name}}<input name="name" maxlength="40" autocomplete="nickname" placeholder="{{.T.f_name_ph}}"></label>
+    <label>{{.T.f_body}}<textarea name="body" maxlength="1000" rows="4" required placeholder="{{.T.f_body_ph}}"></textarea></label>
+    <label class="hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+    <div class="row"><button type="submit">{{.T.f_send}}</button><span class="status" role="status" data-status></span></div>
+  </form>
+  <noscript><p class="lead">{{.T.noscript}}</p></noscript>
+  <ul class="comments" data-list></ul>
+  <button type="button" class="more-btn" data-more hidden>{{.T.more}}</button>
+</section>
+</main>
+
+<footer class="wrap foot">
+  <span>ochq · <a href="https://github.com/mukhiddinov/ochq/blob/main/LICENSE">{{.T.footer_license}}</a></span>
+  <span><a href="https://github.com/mukhiddinov/ochq">GitHub</a> · {{.T.footer_made}}</span>
+</footer>
+<script type="application/json" id="i18n">{{.JS}}</script>
+<script src="/assets/site.js" defer></script>
+</body>
+</html>
