@@ -66,7 +66,7 @@ func TestPageUz(t *testing.T) {
 		`brew install --cask mukhiddinov/tap/ochq`,
 		`https://www.linkedin.com/in/khusniddin-mukhiddinov`,
 		`https://github.com/mukhiddinov`,
-		`Middle Software Engineer`,
+		`<p class="role">Software Engineer</p>`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page lacks %s", want)
