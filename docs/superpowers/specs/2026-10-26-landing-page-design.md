@@ -158,7 +158,7 @@ copy their look and animation logic, not reinvent it.
 ### ochq-web service
 
 - Runs on the host as systemd unit `ochq-web` under its own user
-  `ochq_web`, listening on `172.30.0.1:8090` — the Docker `edge` network's
+  `ochq_web`, listening on `172.30.0.128:8090` — the Docker `edge` network's
   gateway, reachable by Traefik but not from the internet.
 - Data: append-only JSON-lines log `/var/lib/ochq-web/comments.jsonl`
   (`add` / `hide` / `unhide` records; the server picks up records appended

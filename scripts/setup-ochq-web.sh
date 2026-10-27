@@ -20,7 +20,7 @@ done
 [[ -d /etc/ochq && -x /usr/local/bin/ochq-deploy ]] || { echo "run setup-vps.sh first" >&2; exit 1; }
 
 PORT=8090
-WANT_GATEWAY=172.30.0.1
+WANT_GATEWAY=172.30.0.128
 TRAEFIK_IP=172.30.0.2
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")/../deploy" && pwd)"
